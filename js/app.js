@@ -685,6 +685,7 @@ const topPeople = n => { const c = new Map(); live().forEach(x => { [x.waiting_o
 function refOf(name, desc = '', generic = false) {
   const nm = String(name || '').replace(/\s+/g, ' ').trim(); if (!nm) return null;
   if (generic) return { kind: 'generic', label: nm };
+  if (/^(م|مهندس|المهندس|د|دكتور|الدكتور|ا|استاذ|الاستاذ|eng|dr|mr)\.?$/.test(normAr(String(desc || '').trim()))) desc = '';
   const id = matchPerson(nm); return id ? { kind: 'known', id } : { kind: 'new', name: nm, desc: desc || '' };
 }
 const refName = r => !r ? '' : r.kind === 'known' ? pname(r.id) : r.kind === 'new' ? r.name : r.kind === 'generic' ? r.label : r.label || '?';
@@ -702,10 +703,11 @@ function fromLocal(p, raw) {
   if (p.source) d.source = p.source.self ? SELF : (personById(matchPerson(p.source.name))?.name || p.source.name);
   return d;
 }
-function fromAI(a, local) {
+const SELF_RE = /(من نفسي|مبادره|بنفسي|ذاتي|my own|myself|self)/;
+function fromAI(a, local, raw = '') {
   const d = { id: uuid(), raw: local?.raw || '', title: String(a.title || local?.title || '').replace(/\s+/g, ' ').trim().slice(0, 300), due: validDate(a.due) || local?.due || null, noDue: !!a.no_due, weekendOk: false,
     priority: ['hi', 'mid', 'lo'].includes(a.priority) ? a.priority : local?.priority || 'mid', role: ['exec', 'follow', 'both'].includes(a.role) ? a.role : 'exec',
-    source: a.source_self ? SELF : a.source ? (personById(matchPerson(a.source))?.name || String(a.source).slice(0, 80)) : local?.source || null,
+    source: a.source_self && SELF_RE.test(normAr(raw || local?.raw || '')) ? SELF : a.source ? (personById(matchPerson(a.source))?.name || String(a.source).slice(0, 80)) : local?.source || null,
     project: String(a.project || '').slice(0, 80), waitWhat: a.waiting_what || null, people: [] };
   (a.people || []).slice(0, 8).forEach(p => {
     if (!p || !p.name) return;
@@ -839,7 +841,7 @@ async function chatSend(text, label) {
       else if ((r.intent === 'capture' || r.intent === 'log') && ((r.tasks || []).length || (r.logs || []).length)) {
         const tk = (r.tasks || []).slice(0, 10), lg = (r.logs || []).filter(a => a && a.title).slice(0, Math.max(0, 10 - tk.length));
         const tl = locals.filter(d => !isLogD(d));
-        const ai = [...lg.map(a => fromLog(a.title, a.date, text, a.project)), ...tk.map((a, i) => fromAI(a, tl.length === tk.length ? tl[i] : { source: tl.length === 1 ? tl[0].source : null }))];
+        const ai = [...lg.map(a => fromLog(a.title, a.date, text, a.project)), ...tk.map((a, i) => fromAI(a, tl.length === tk.length ? tl[i] : { source: tl.length === 1 ? tl[0].source : null }, text))];
         CH.drafts.splice(start, locals.length, ...ai);
       }
       else if (r.intent === 'other' && r.reply) { CH.drafts.splice(start, locals.length); CH.msgs.push({ who: 'bot', html: `<span dir="auto">${esc(r.reply)}</span>` }); }
