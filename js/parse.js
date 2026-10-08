@@ -56,7 +56,8 @@ export function findPeople(text, people) {
 const STOP = new Set(['عشان', 'علشان', 'بخصوص', 'عن', 'على', 'في', 'من', 'مع', 'الى', 'الي', 'قبل', 'بعد', 'بكره', 'بكرا', 'غدا', 'اليوم', 'النهارده', 'الاحد', 'الاثنين', 'الاتنين', 'الثلاثاء', 'التلات', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'و', 'لما', 'يرد', 'يبعت', 'يعتمد', 'يرسل', 'يوافق', 'ضروري', 'عاجل', 'الاسبوع', 'الجاي', 'القادم', 'اخر', 'الشهر', 'رد', 'اعتماد', 'موافقه', 'قرار', 'حول', 'لأجل', 'لاجل', 'about', 'regarding', 'to', 'for', 'tomorrow', 'today']);
 // normalized stop-words (built once); «على» the preposition is checked on the raw word because it normalizes to the name «علي»
 const STOPN = new Set([...STOP, 'بعدين', 'بعدها', 'كمان', 'برضه', 'برضو', 'ثم', 'اني', 'ان', 'انه', 'لو', 'اذا', 'يعني', 'خلال', 'حتى', 'لحد', 'and', 'then'].map(x => normAr(x)).filter(x => x !== 'علي'));
-const isStop = w => STOPN.has(normAr(w)) || /^(على|عل[ىي]ه|عليها)$/.test(w);
+const VERBISH = /^(?:أ|ا)(?:راجع|تابع|كلم|كلّم|رسل|بعت|جهز|جهّز|عمل|زور|طلب|دقق|فحص|سلم|سلّم|حدث|حدّث|كتب|طبع|خلص|خلّص|نهي|رفع|سأل|سال|تصل|بلغ|ذكر|حضر|حضّر|عد|جهّز)/;
+const isStop = w => STOPN.has(normAr(w)) || /^(على|عل[ىي]ه|عليها|نفسي)$/.test(w) || VERBISH.test(w);
 const WEEKDAYS = [['الاحد', 'الحد', 'sunday'], ['الاثنين', 'الاتنين', 'monday'], ['الثلاثاء', 'التلات', 'الثلاث', 'tuesday'], ['الاربعاء', 'الاربع', 'wednesday'], ['الخميس', 'thursday'], ['الجمعه', 'friday'], ['السبت', 'saturday']];
 const FU_VERB = /(^|\s)(و?اتابع|متابعه|و?اكلم|و?اتصل|و?اسال|و?اذكر|و?اراسل|و?ابلغ|و?ارجع ل|follow\s*up|call|ask|remind|ping)(\s|$)/;
 const WAIT_VERB = /(مستني|منتظر|بانتظار|في انتظار|waiting)/;
@@ -88,17 +89,38 @@ const VERBS = [
 ];
 const DATE_WORDS = '(?:النهارده|النهاردة|اليوم|بكرة|بكره|بكرا|غدًا|غدا|بعد بكرة|بعد بكره|بعد غد|الأحد|الاحد|الاثنين|الإثنين|الاتنين|الثلاثاء|التلات|الأربعاء|الاربعاء|الخميس|الجمعة|السبت|الأسبوع الجاي|الاسبوع الجاي|الأسبوع القادم|آخر الشهر|اخر الشهر|آخر الأسبوع|اخر الاسبوع|بعد أسبوع|بعد اسبوع|بعد يومين|today|tomorrow|next week)';
 const DATE_RE = new RegExp('\\s*(?:قبل|يوم|في|بحلول|by|on)?\\s*' + DATE_WORDS + '(?=\\s|$|[،,.])', 'g');
-const PRIO_RE = /\s*(عاجل(?:ة)?|ضروري|مهم جدًا|مهم جدا|urgent|asap)(?=\s|$|[،,.])/g;
+const PRIO_RE = /\s*(عاجل(?:ة)?(?:\s+جد(?:ًا|ا|اً))?|ضروري(?:\s+جد(?:ًا|ا|اً))?|مهم(?:ة)?\s+جد(?:ًا|ا|اً)|urgent|asap)(?=\s|$|[،,.])/g;
 const FU_SPLIT = /\s+و\s*(?=أتابع|اتابع|أكلم|اكلم|أسأل|اسأل|اسال|أتصل|اتصل|أذكّر|اذكر|أبلغ|ابلغ)/;
 const WHY_RE = /(?:عشان|علشان|بخصوص|لأجل|لاجل|حول|عن موضوع|عن|about|regarding)\s+(.+)$/;
 const WHAT_MAP = [[/^(يبعت|يرسل|يبعتلي|يرسلي|تبعت|ترسل|تبعتلي)\s*/, 'إرسال '], [/^(يرد|يردّ|ترد|تردّ)\s*(علي|عليّ)?\s*/, 'الرد '], [/^(يعتمد|تعتمد)\s*/, 'اعتماد '], [/^(يوافق|توافق)\s*(على)?\s*/, 'الموافقة على '], [/^(يسلم|يسلّم|تسلم|تسلّم)\s*/, 'تسليم '], [/^(يراجع|تراجع)\s*/, 'مراجعة '], [/^(يجهز|يجهّز|تجهز|تجهّز)\s*/, 'تجهيز ']];
 
 function clean(s) { return s.replace(/\s+/g, ' ').replace(/^[\s،,.\-–—]+|[\s،,.\-–—]+$/g, '').trim(); }
 
+// job descriptors that precede a name: «رئيس قسم العطور محمد عباس» → name «محمد عباس», desc «رئيس قسم العطور»
+const ROLE_W = new Set(['رئيس', 'مدير', 'مديره', 'مشرف', 'مشرفه', 'مسؤول', 'مسئول', 'مسؤوله', 'منسق', 'منسقه', 'اخصائي', 'اخصائيه', 'موظف', 'موظفه', 'مندوب', 'نائب', 'محاسب', 'امين', 'قائد', 'كبير'].map(normAr));
+const UNIT_W = new Set(['قسم', 'اداره', 'شعبه', 'وحده', 'فريق', 'مكتب', 'فرع', 'مصنع', 'مستودع', 'معرض'].map(normAr));
+const isRoleWord = w => ROLE_W.has(normAr(w).replace(/^ال/, ''));
+function descName(words) {
+  // words start right after the preposition; returns { name, desc, generic } or null
+  if (!words.length || !isRoleWord(words[0])) return null;
+  const desc = [words[0]]; let i = 1;
+  while (i < words.length && i < 6 && (/^ال/.test(normAr(words[i])) || UNIT_W.has(normAr(words[i])))) { if (isStop(words[i])) break; desc.push(words[i]); i++; }
+  const name = [];
+  while (i < words.length && name.length < 2 && !isStop(words[i]) && !/^ال/.test(normAr(words[i])) && /^[\p{L}.]{2,}$/u.test(words[i])) { name.push(words[i]); i++; }
+  const d = clean(desc.join(' '));
+  return name.length ? { name: clean(name.join(' ')), desc: d, generic: false } : { name: d, desc: d, generic: true };
+}
 function newNameCandidate(text, knownSpans) {
   // "مع خالد"، "من م. سارة"، "لفهد" → a name not yet registered
   const re = /(?:^|\s)(?:(?:مع|من|عند|with|from)\s+|لـ\s*|و?(?:أكلم|اكلم|أكلّم|أسأل|اسأل|اسال|أبلغ|ابلغ|أراسل|اراسل|أذكّر|اذكر|أتصل ب|اتصل ب|أتصل على|اتصل على)\s+)((?:(?:م|د|أ|ا)\.\s*)?[\p{L}]{2,}(?:\s+[\p{L}]{2,})?)/gu;
   let m;
+  const roleRe = /(?:^|\s)(?:مع|من|عند|لـ?|with|from)\s*((?:ال)?(?:رئيس|مدير|مديرة|مشرف|مشرفة|مسؤول|مسئول|منسق|منسقة|أخصائي|اخصائي|موظف|مندوب|نائب|محاسب|أمين|امين)(?:\s+[\p{L}]+){0,6})/gu;
+  let rm;
+  while ((rm = roleRe.exec(text))) {
+    const start = rm.index + rm[0].indexOf(rm[1]);
+    if (knownSpans.some(h => start < h.e && start + rm[1].length > h.s)) continue;
+    const dn = descName(rm[1].split(/\s+/)); if (dn) return dn;
+  }
   while ((m = re.exec(text))) {
     const start = m.index + m[0].indexOf(m[1]);
     if (knownSpans.some(h => start < h.e && start + m[1].length > h.s)) continue;
@@ -106,9 +128,27 @@ function newNameCandidate(text, knownSpans) {
     const keep = [];
     for (const w of words) { if (isStop(w) || /^ال/.test(normAr(w)) && keep.length === 0 && !/^(?:م|د|أ|ا)\./.test(w) || (keep.length && /^و[\p{L}]{3,}/u.test(w))) break; keep.push(w); if (!/^(?:م|د|أ|ا)\.$/.test(w) && keep.length >= 2) break; }
     const name = clean(keep.join(' '));
-    if (name && !isStop(name) && normAr(name).length >= 2) return name;
+    if (name && !isStop(name) && normAr(name).length >= 2) return { name, desc: '', generic: false };
   }
   return null;
+}
+/** Who assigned the task, if said: «طلب مني م. مأمون», «بتكليف من المدير», «من نفسي». */
+export function sourceFrom(raw) {
+  const n = normAr(raw);
+  if (/(من نفسي|مبادره مني|مبادرة مني|تكليف ذاتي|self[- ]?initiated)/.test(n)) return { self: true };
+  const m = raw.match(/(?:طلب(?:ها|ه)?\s+مني|طلبت\s+مني|كلفني|كلّفني|بتكليف\s+من|بطلب\s+من|بناء\s+على\s+طلب|assigned by|requested by)\s+((?:(?:م|د|أ|ا)\.\s*)?[\p{L}]{2,}(?:\s+[\p{L}]{2,})?)/u);
+  if (!m) return null;
+  const words = m[1].split(/\s+/); const keep = [];
+  for (const w of words) { if (isStop(w)) break; keep.push(w); }
+  const name = clean(keep.join(' '));
+  return name ? { name, span: m[0].slice(0, m[0].indexOf(m[1])) + name } : null;
+}
+/** Offline split of several tasks: one per line, or numbered «1) … 2) …». */
+export function splitTasks(text) {
+  const t = String(text || '').trim(); if (!t) return [];
+  let parts = t.split(/\n+/);
+  if (parts.length === 1) parts = t.split(/(?:^|\s)(?:[1-9١-٩]|10|١٠)\s*[-.)\u066b:]\s+/).filter(Boolean);
+  return parts.map(x => x.replace(/^\s*(?:[-•*]|[1-9١-٩][.)-])\s*/, '').trim()).filter(x => x.length > 2).slice(0, 10);
 }
 
 /** Extra people joined with «و» right after a span: "مع خالد وسارة وم. فهد" → ['سارة', 'م. فهد'] (new names only). */
@@ -147,8 +187,10 @@ export function parseCapture(text, people, td = today()) {
     andNames(raw, hits[hits.length - 1].e, hits).forEach(n => more.push({ kind: 'new', name: n }));
   } else {
     const nm = newNameCandidate(raw, hits);
-    if (nm) { person = { kind: 'new', name: nm }; const at = raw.indexOf(nm); if (at >= 0) andNames(raw, at + nm.length, hits).forEach(n => more.push({ kind: 'new', name: n })); }
+    if (nm) { person = { kind: 'new', name: nm.name, desc: nm.desc, generic: nm.generic }; const at = raw.indexOf(nm.name); if (at >= 0 && !nm.generic) andNames(raw, at + nm.name.length, hits).forEach(n => more.push({ kind: 'new', name: n })); }
   }
+  const source = sourceFrom(raw);
+  if (source && !source.self && person && person.kind === 'new' && normAr(person.name) === normAr(source.name)) { person = more.shift() || null; }
 
   const fuVerb = FU_VERB.test(n);
   const waitVerb = WAIT_VERB.test(n);
@@ -159,6 +201,9 @@ export function parseCapture(text, people, td = today()) {
     const p = people.find(x => x.id === person.id);
     if (p) base = raw.slice(0, hits[0].s) + p.name + raw.slice(hits[0].e);
   }
+  const src0 = sourceFrom(raw);
+  if (src0?.span) base = base.replace(src0.span, ' ');
+  base = base.replace(/\s*(?:من نفسي|مبادرة مني|مبادره مني|تكليف ذاتي)\s*/g, ' ').trim();
   let s = base.replace(FILLER, '').replace(/\s*(?:و\s*)?(?:مستني|منتظر|بانتظار|في انتظار)\s+.*$/, '');
   const primaryFu = /^(أتابع|اتابع|أكلم|اكلم|أسأل|اسأل|اسال|أتصل|اتصل|أذكّر|اذكر|أبلغ|ابلغ)/.test(s);
   if (!primaryFu) s = s.split(FU_SPLIT)[0];
@@ -182,9 +227,67 @@ export function parseCapture(text, people, td = today()) {
     let fdue = null;
     if (primaryFu) fdue = due;
     else if (due) fdue = diffDays(due, td) > 1 ? addWorkdays(due, -1) : due;
-    fu = { what: what || (primaryFu ? '' : s), due: fdue };
+    fu = { what: what || '', due: fdue };
     ask = !fdue;
   }
-  return { title: s.slice(0, 300), due, priority, person, more: person ? more.slice(0, 5) : [], fu, waiting, ask };
+  return { title: s.slice(0, 300), due, dueWeekend: !!(due && isWeekend(due)), priority, person, more: person ? more.slice(0, 5) : [], fu, waiting, ask, source };
 }
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/* ---------- work log: things already done ("النهارده عملت كذا وكذا") ---------- */
+const PAST_RAW = {
+  'عملت': '', 'عملنا': '', 'سويت': '', 'خلصت': 'إنهاء', 'خلصنا': 'إنهاء', 'انهيت': 'إنهاء', 'انجزت': 'إنجاز', 'زرت': 'زيارة', 'زرنا': 'زيارة',
+  'راجعت': 'مراجعة', 'حضرت': 'حضور', 'سلمت': 'تسليم', 'بعت': 'إرسال', 'ارسلت': 'إرسال', 'قابلت': 'مقابلة', 'فحصت': 'فحص', 'اتصلت': 'اتصال',
+  'كلمت': 'التواصل مع', 'جهزت': 'تجهيز', 'رفعت': 'رفع', 'دققت': 'تدقيق', 'اعتمدت': 'اعتماد', 'قفلت': 'إغلاق', 'اجتمعت': 'اجتماع', 'قعدت': 'اجتماع',
+  'شاركت': 'المشاركة في', 'ساعدت': 'مساعدة', 'تابعت': 'متابعة', 'جمعت': 'جمع', 'صورت': 'تصوير', 'كتبت': 'كتابة', 'حدثت': 'تحديث', 'نظمت': 'تنظيم',
+  'دربت': 'تدريب', 'استلمت': 'استلام', 'سحبت': 'سحب', 'طبعت': 'طباعة', 'عدلت': 'تعديل', 'اعدت': 'إعداد', 'اعددت': 'إعداد', 'ناقشت': 'مناقشة',
+  'نسقت': 'تنسيق', 'حليت': 'حل', 'صلحت': 'إصلاح', 'وزعت': 'توزيع', 'لفيت': 'جولة على', 'عرضت': 'عرض', 'شرحت': 'شرح', 'رتبت': 'ترتيب', 'فتحت': 'فتح',
+  'did': '', 'finished': 'Finished', 'completed': 'Completed', 'visited': 'Visited', 'reviewed': 'Reviewed', 'sent': 'Sent', 'met': 'Met', 'checked': 'Checked', 'inspected': 'Inspected',
+};
+const PAST = new Map(Object.entries(PAST_RAW).map(([k, v]) => [normAr(k), v]));
+const LOG_FILL = new Set(['النهارده', 'النهاردة', 'النهاردا', 'اليوم', 'امبارح', 'امس', 'البارحه', 'الصبح', 'الصباح', 'انا', 'كمان', 'برضو', 'وكمان', 'today', 'yesterday', 'i', 'also', 'and', 'و', 'ثم', 'وبعدين', 'بعدين', 'اول']);
+const pastVerb = w => { const n = normAr(w); if (PAST.has(n)) return n; if (n.length > 3 && n[0] === 'و' && PAST.has(n.slice(1))) return n.slice(1); return null; };
+/** True when the message reports work already done rather than work to do. */
+export function isLogText(text) {
+  const n = normAr(text).replace(/[^\p{L}\p{N}\s\n]/gu, ' ');
+  if (/(^|\s)(ايه|ايش|مين|كام|هات|اعرض|what|which|how many)(\s|$)|[?؟]/.test(normAr(text))) return false;
+  if (/(اللي عملته|اللي انجزته|انجازاتي|سجل انجاز|سجل اني|i did today|today i did)/.test(n)) return true;
+  const starts = p => { const w = normAr(p).replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean); let i = 0; while (i < w.length && i < 4 && LOG_FILL.has(w[i])) i++; return !!(w[i] && pastVerb(w[i])); };
+  const pieces = splitTasks(text);
+  return pieces.length > 1 ? pieces.filter(starts).length * 2 >= pieces.length : starts(text);
+}
+/** Date a log message refers to: today, yesterday, or the latest past weekday named. */
+export function logDate(text, td = today()) {
+  const n = ' ' + normAr(text) + ' ';
+  if (/\sاول (امبارح|امس)\s/.test(n)) return addDays(td, -2);
+  if (/\s(امبارح|امس|البارحه|yesterday)\s/.test(n)) return addDays(td, -1);
+  const days = [['الاحد', 0], ['الاتنين', 1], ['الاثنين', 1], ['التلات', 2], ['الثلاثاء', 2], ['الاربع', 3], ['الاربعاء', 3], ['الخميس', 4], ['الجمعه', 5], ['السبت', 6]];
+  for (const [nm, w] of days) if (n.includes(' ' + nm) || n.includes(' يوم ' + nm)) { let d = td; if (/(اللي فات|الماضي|last)/.test(n) || pd(d).getDay() === w) d = addDays(d, -1); while (pd(d).getDay() !== w) d = addDays(d, -1); return d; }
+  return td;
+}
+/** "النهارده زرت معرض الملقا وفحصت شحنة العود" → [{title:'زيارة معرض الملقا'}, {title:'فحص شحنة العود'}] */
+export function splitLogs(text) {
+  const pieces = splitTasks(text);
+  const out = [];
+  for (const piece of (pieces.length ? pieces : [text])) {
+    for (const part of piece.split(/\s*[،,؛;]\s*/)) {
+      const words = part.trim().split(/\s+/).filter(Boolean); let cur = [];
+      const flush = () => { const t = logTitle(cur); if (t) out.push({ title: t }); cur = []; };
+      words.forEach((w, i) => { if (i > 0 && pastVerb(w) && cur.some(x => !LOG_FILL.has(normAr(x)))) flush(); cur.push(w); });
+      flush();
+    }
+  }
+  return out.slice(0, 10);
+}
+function logTitle(words) {
+  let w = words.filter(x => !/^(النهارده|النهاردة|اليوم|امبارح|أمس|امس|الصبح|today|yesterday)$/.test(normAr(x)));
+  while (w.length && LOG_FILL.has(normAr(w[0]))) w.shift();
+  if (w[0] && /^(اول)$/.test(normAr(w[0]))) w.shift();
+  if (!w.length) return '';
+  const v = pastVerb(w[0]);
+  if (v != null) { const m = PAST.get(v); w = m ? [m, ...w.slice(1)] : w.slice(1); }
+  while (w.length && LOG_FILL.has(normAr(w[w.length - 1]))) w.pop();
+  while (w.length && /^(ب?يوم|ال(احد|اتنين|اثنين|تلات|ثلاثاء|اربع|اربعاء|خميس|جمعه|سبت)|اللي|فات)$/.test(normAr(w[w.length - 1]))) w.pop();
+  const s = w.join(' ').replace(/\s+/g, ' ').trim();
+  return s.length > 2 ? s.slice(0, 300) : '';
+}

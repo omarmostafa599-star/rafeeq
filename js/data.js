@@ -178,6 +178,21 @@ export async function invokeRefine(payload) {
   return data.result;
 }
 
+/** Chat understanding (Gemini). Times out so a stalled request never blocks the chat. */
+export async function invokeAssist(payload, ms = 15000) {
+  if (!sb || state.mode !== 'cloud') throw { code: 'local' };
+  if (!navigator.onLine) throw { code: 'offline' };
+  let timer;
+  const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej({ code: 'timeout' }), ms); });
+  try {
+    const { data, error } = await Promise.race([sb.functions.invoke('assist', { body: payload }), timeout]);
+    if (error) throw { code: 'server', detail: error.message };
+    if (data?.error) throw { code: data.error, detail: data.detail };
+    if (!data?.result) throw { code: 'server' };
+    return data.result;
+  } finally { clearTimeout(timer); }
+}
+
 /* ---------- profile ---------- */
 async function pullProfile() {
   if (!sb || state.mode !== 'cloud') return;
@@ -200,12 +215,12 @@ async function pushProfile() {
 
 /* ---------- mutations ---------- */
 const COLS = {
-  tasks: ['id', 'title', 'details', 'status', 'priority', 'role', 'due', 'project', 'source', 'waiting_on', 'waiting_what', 'notes', 'steps_done', 'steps_total', 'completed_on', 'result', 'archived', 'followups', 'log', 'ai', 'deleted', 'client_ts', 'created_at'],
+  tasks: ['id', 'kind', 'title', 'details', 'status', 'priority', 'role', 'due', 'project', 'source', 'waiting_on', 'waiting_what', 'notes', 'steps_done', 'steps_total', 'completed_on', 'result', 'archived', 'followups', 'log', 'ai', 'deleted', 'client_ts', 'created_at'],
   people: ['id', 'name', 'org', 'contact', 'notes', 'deleted', 'client_ts', 'created_at'],
   files: ['id', 'drive_id', 'name', 'mime', 'size', 'task_id', 'person_id', 'note', 'deleted', 'client_ts', 'created_at'],
 };
 export function newTask(fields = {}) {
-  return Object.assign({ id: uuid(), title: '', details: '', status: 'todo', priority: 'mid', role: 'exec', due: null, project: '', source: '', waiting_on: null, waiting_what: 'reply', notes: '', steps_done: 0, steps_total: 0, completed_on: null, result: '', archived: false, followups: [], log: [], ai: {}, deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields);
+  return Object.assign({ id: uuid(), kind: 'task', title: '', details: '', status: 'todo', priority: 'mid', role: 'exec', due: null, project: '', source: '', waiting_on: null, waiting_what: 'reply', notes: '', steps_done: 0, steps_total: 0, completed_on: null, result: '', archived: false, followups: [], log: [], ai: {}, deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields);
 }
 export function newPerson(name) { return { id: uuid(), name: name.trim().replace(/\s+/g, ' '), org: '', contact: '', notes: '', deleted: false, client_ts: nowISO(), created_at: nowISO() }; }
 export function newFile(fields = {}) { return Object.assign({ id: uuid(), drive_id: '', name: '', mime: '', size: 0, task_id: null, person_id: null, note: '', deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields); }
@@ -245,7 +260,7 @@ async function flush() {
     if (!COLS[tbl]) { outbox.delete(k); continue; }
     const obj = listOf(tbl).find(x => x.id === id);
     if (!obj) { outbox.delete(k); continue; }
-    const row = {}; COLS[tbl].forEach(c => { if (obj[c] !== undefined) row[c] = obj[c]; });
+    const row = {}; COLS[tbl].forEach(c => { if (obj[c] !== undefined) row[c] = obj[c]; }); if (tbl === 'tasks') row.kind = obj.kind === 'log' ? 'log' : 'task';
     rows[tbl].push(row); snap.set(k, obj.client_ts);
   }
   try {
