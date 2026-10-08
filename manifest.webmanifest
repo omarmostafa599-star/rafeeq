@@ -1,17 +1,17 @@
 {
   "name": "رفيق — Rafeeq",
   "short_name": "رفيق",
-  "description": "تنظيم الأعمال والمتابعات والإنجازات — Organize work, follow-ups and achievements",
-  "start_url": "./#today",
+  "description": "مهامك ومتابعاتك في مكان واحد",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "dir": "rtl",
   "lang": "ar",
-  "background_color": "#f6f7f9",
-  "theme_color": "#0f766e",
+  "background_color": "#EEF1F5",
+  "theme_color": "#EEF1F5",
   "icons": [
-    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
-    {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
   ]
 }

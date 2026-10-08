@@ -3,1871 +3,381 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>رفيق — Rafeeq</title>
-<meta name="description" content="تنظيم الأعمال والمتابعات والإنجازات">
-<meta name="theme-color" content="#0f766e">
+<title>رفيق</title>
+<meta name="description" content="مهامك ومتابعاتك في مكان واحد">
+<meta name="theme-color" content="#EEF1F5">
+<meta name="color-scheme" content="light">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="رفيق">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Readex+Pro:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
+/* رفيق — light by default: white, light grey, navy, slate. Dark only by explicit choice. */
 :root{
-  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f1f3f6; --border:#e3e6eb; --border-strong:#cfd4dc;
-  --text:#1b1f27; --text-2:#4b5363; --text-3:#7a8394;
-  --accent:#0f766e; --accent-2:#115e59; --accent-soft:#e6f4f2; --on-accent:#ffffff;
-  --danger:#b42318; --danger-soft:#fdecea; --warn:#a15c07; --warn-soft:#fdf3e2;
-  --info:#1d4ed8; --info-soft:#e8effd; --ok:#067647; --ok-soft:#e6f6ee; --muted-soft:#eef0f3;
-  --radius:12px; --radius-sm:8px; --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
-  --font: "Segoe UI", "Noto Sans Arabic", "Noto Sans", Tahoma, system-ui, -apple-system, sans-serif;
+  --paper:#EEF1F5; --card:#FFFFFF; --ink:#16213A; --ink-2:#4B5563; --ink-3:#8A93A3; --line:#E1E5EC; --line-2:#C9CFD9;
+  --accent:#1F3366; --accent-2:#16264D; --accent-ink:#FFFFFF; --accent-soft:#E6EAF3;
+  --late:#B4372E; --late-soft:#F8E8E6; --wait:#9A6510; --wait-soft:#F7EEDD; --done:#1F7A50; --done-soft:#E3F1EA;
+  --shadow:0 1px 2px rgba(22,33,58,.05),0 4px 14px rgba(22,33,58,.06); --shadow-up:0 -8px 30px rgba(22,33,58,.14);
+  --f-display:'Readex Pro','IBM Plex Sans Arabic','Segoe UI',Tahoma,system-ui,sans-serif;
+  --f-body:'IBM Plex Sans Arabic','Segoe UI',Tahoma,system-ui,sans-serif;
+  --r:16px; --r-sm:12px; color-scheme:light;
 }
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#0f1216; --surface:#171b21; --surface-2:#1e232b; --border:#2a313b; --border-strong:#3a424e;
-    --text:#e8eaee; --text-2:#b4bac5; --text-3:#858d9a;
-    --accent:#2dd4bf; --accent-2:#5eead4; --accent-soft:#12302d; --on-accent:#06201d;
-    --danger:#f97066; --danger-soft:#3a1d1b; --warn:#f5b056; --warn-soft:#352717;
-    --info:#7ea6ff; --info-soft:#1b2540; --ok:#47cd89; --ok-soft:#14301f; --muted-soft:#232932;
-    --shadow:0 1px 2px rgba(0,0,0,.4);
-  }
+.shell[data-mode="dark"]{
+  --paper:#0F1522; --card:#182033; --ink:#E8ECF3; --ink-2:#AEB6C4; --ink-3:#7C8596; --line:#263049; --line-2:#334060;
+  --accent:#9FB2DA; --accent-2:#C3D0EA; --accent-ink:#0F1522; --accent-soft:#1F2A44;
+  --late:#F08A80; --late-soft:#3A2220; --wait:#E0B060; --wait-soft:#352A16; --done:#6FCF9E; --done-soft:#16301F;
+  --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-up:0 -8px 30px rgba(0,0,0,.5); color-scheme:dark;
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
-button,input,select,textarea{font:inherit;color:inherit}
-a{color:var(--accent)}
+html,body{margin:0;min-height:100%}
+body{background:#E3E7EE;font-family:var(--f-body);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
 [hidden]{display:none!important}
+.shell{min-height:100vh;background:var(--paper);color:var(--ink)}
+.num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+.muted{color:var(--ink-3)}
+em{font-style:normal;color:var(--ink-3);font-weight:400;font-size:.92em}
 
-/* Layout */
-.app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
-.sidebar{background:var(--surface);border-inline-end:1px solid var(--border);padding:18px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:4px}
-.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 18px}
-.brand-mark{width:34px;height:34px;border-radius:9px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:700;font-size:17px}
-.brand-name{font-weight:700;font-size:18px}
-.brand-sub{font-size:12px;color:var(--text-3)}
-.nav-link{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);color:var(--text-2);text-decoration:none;font-weight:500}
-.nav-link:hover{background:var(--surface-2);color:var(--text)}
-.nav-link.active{background:var(--accent-soft);color:var(--accent-2)}
-.nav-link svg{width:19px;height:19px;flex:none}
-.nav-count{margin-inline-start:auto;font-size:12px;background:var(--danger);color:#fff;border-radius:99px;padding:0 7px;min-width:20px;text-align:center}
-.sidebar-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:8px}
-.main{min-width:0;padding:22px 28px 90px;max-width:1040px;width:100%}
-.topbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
-.topbar h1{font-size:22px;margin:0;font-weight:700}
-.topbar .sub{color:var(--text-3);font-size:13px}
-.topbar .spacer{flex:1}
-.bottom-nav,.fab,.mobile-head{display:none}
+/* splash / login / onboarding */
+#splash{min-height:100vh;display:grid;place-items:center}
+.brand-mark{width:60px;height:60px;border-radius:18px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--f-display);font-size:28px;font-weight:700}
+.brand-mark.sm{width:34px;height:34px;border-radius:10px;font-size:17px}
+.login{min-height:100vh;display:flex;justify-content:center;padding:24px 16px calc(24px + env(safe-area-inset-bottom,0px))}
+.login-in,.onb{width:100%;max-width:420px;display:flex;flex-direction:column}
+.login-in .brand-mark,.onb .brand-mark{margin-top:7vh}
+.login h1,.onb h1{font-family:var(--f-display);font-size:32px;margin:16px 0 2px;line-height:1.3}
+.lead{color:var(--ink-2);font-size:16px;margin:0}
+.feat{list-style:none;padding:0;margin:26px 0;display:flex;flex-direction:column;gap:14px}
+.feat li{display:flex;gap:12px;align-items:flex-start;color:var(--ink-2);font-size:14.5px}
+.feat b{display:block;color:var(--ink);font-size:15px}
+.fi{width:36px;height:36px;border-radius:11px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;color:var(--accent);flex:none}
+.fi svg{width:19px;height:19px}
+.login-actions{margin-top:auto;display:flex;flex-direction:column;gap:10px}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;min-height:52px;border-radius:14px;border:1px solid var(--line-2);background:var(--card);font-weight:600;font-size:15.5px;width:100%;color:var(--ink)}
+.gbtn.sm{min-height:44px;font-size:14.5px;margin-top:10px}
+.notice{background:var(--accent-soft);color:var(--accent-2);border-radius:12px;padding:12px 14px;font-size:14px}
+.legal{font-size:12.5px;color:var(--ink-3);text-align:center;margin:12px 0 0}
+.linkbtn{background:none;border:none;color:var(--accent);font-weight:600;padding:6px;font-size:14px}
+.linkbtn.center{display:block;margin:12px auto}
+.onb .form{margin-top:24px}
 
-/* Buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border-strong);background:var(--surface);padding:7px 14px;border-radius:var(--radius-sm);cursor:pointer;font-weight:500;font-size:14px;min-height:36px;text-decoration:none;color:var(--text);white-space:nowrap}
-.btn:hover{background:var(--surface-2)}
-.btn:focus-visible,.nav-link:focus-visible,.row:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.check:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-.btn-primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
-.btn-danger{color:var(--danger);border-color:var(--danger)}
-.btn-danger:hover{background:var(--danger-soft)}
-.btn-ghost{border-color:transparent;background:transparent}
-.btn-sm{padding:4px 10px;min-height:30px;font-size:13px}
-.btn svg{width:16px;height:16px}
-.btn-group{display:flex;gap:8px;flex-wrap:wrap}
+/* layout */
+#app{min-height:100vh}
+main{padding:8px 16px calc(110px + env(safe-area-inset-bottom,0px));max-width:760px;margin-inline:auto}
+.hdr{display:flex;align-items:flex-end;gap:12px;padding-block:14px 8px}
+.hdr .grow{flex:1;min-width:0}
+.hdr h1{font-family:var(--f-display);font-weight:700;font-size:26px;line-height:1.3;margin:0}
+.sub{color:var(--ink-3);font-size:13px}
+.hello{color:var(--ink-2);font-size:14px;margin-top:2px}
+.hdr-side{flex:none}
+.desk{display:none}
 
-/* Cards & sections */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
-.card-pad{padding:16px 18px}
-.section{margin-bottom:22px}
-.section-head{display:flex;align-items:center;gap:8px;margin:0 0 8px}
-.section-head h2{font-size:15px;margin:0;font-weight:600}
-.badge{font-size:12px;background:var(--muted-soft);color:var(--text-2);border-radius:99px;padding:1px 8px;font-weight:600}
-.badge.danger{background:var(--danger-soft);color:var(--danger)}
-.section-note{font-size:12.5px;color:var(--text-3);margin:-4px 0 8px}
+/* nav: bottom bar on phones, sidebar on wide screens */
+#nav{position:fixed;bottom:0;inset-inline:0;z-index:20;background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr 76px 1fr 1fr;align-items:end;padding:6px 6px calc(8px + env(safe-area-inset-bottom,0px))}
+.nav-brand,.nav-foot{display:none}
+.tab{position:relative;border:none;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11.5px;color:var(--ink-3);padding:6px 0;font-weight:500}
+.tab svg{width:23px;height:23px}
+.tab.on{color:var(--accent)} .tab.on span{font-weight:700}
+.tab .dot{position:absolute;top:2px;inset-inline-start:calc(50% + 6px);background:var(--late);color:#fff;font-style:normal;font-size:10.5px;font-weight:700;min-width:18px;line-height:18px;border-radius:99px;padding:0 4px;text-align:center}
+.addbtn{justify-self:center;width:58px;height:58px;border-radius:20px;background:var(--accent);color:var(--accent-ink);border:none;display:grid;place-items:center;box-shadow:0 8px 20px color-mix(in srgb,var(--accent) 35%,transparent);transform:translateY(-10px)}
+.addbtn svg{width:28px;height:28px}
+.addbtn .lbl{display:none}
 
-/* Rows */
-.list{display:flex;flex-direction:column}
-.row{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-top:1px solid var(--border);cursor:pointer;background:var(--surface)}
-.list > .row:first-child{border-top:none;border-radius:var(--radius) var(--radius) 0 0}
-.list > .row:last-child{border-radius:0 0 var(--radius) var(--radius)}
-.list > .row:only-child{border-radius:var(--radius)}
-.row:hover{background:var(--surface-2)}
-.row-main{flex:1;min-width:0}
-.row-title{font-weight:600;overflow-wrap:anywhere}
-.row-sub{font-size:13px;color:var(--text-2);margin-top:2px;overflow-wrap:anywhere}
-.row-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:5px;font-size:12.5px;color:var(--text-3);align-items:center}
-.row-side{display:flex;align-items:center;gap:6px;flex:none}
-.row.done .row-title{color:var(--text-3);text-decoration:line-through}
-.check{width:22px;height:22px;border-radius:50%;border:2px solid var(--border-strong);background:transparent;flex:none;cursor:pointer;margin-top:1px;display:grid;place-items:center;padding:0}
-.check:hover{border-color:var(--accent);background:var(--accent-soft)}
-.check.on{background:var(--ok);border-color:var(--ok);cursor:default}
-.check svg{width:13px;height:13px;color:#fff}
+/* sync chip */
+.sync{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);background:var(--card);border:1px solid var(--line);border-radius:99px;padding:3px 10px;white-space:nowrap;font-weight:500}
+.sync.ok{color:var(--done)} .sync.warn{color:var(--wait);border-color:color-mix(in srgb,var(--wait) 40%,var(--line))} .sync.err{color:var(--late);border-color:var(--late)} .sync.local{color:var(--ink-2)}
 
-/* Pills */
-.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:1px 8px;border-radius:99px;background:var(--muted-soft);color:var(--text-2);white-space:nowrap}
-.pill.s-in_progress{background:var(--info-soft);color:var(--info)}
-.pill.s-waiting{background:var(--warn-soft);color:var(--warn)}
-.pill.s-paused{background:var(--muted-soft);color:var(--text-2)}
-.pill.s-done{background:var(--ok-soft);color:var(--ok)}
-.pill.s-cancelled{background:var(--muted-soft);color:var(--text-3);text-decoration:line-through}
-.pill.late{background:var(--danger-soft);color:var(--danger)}
-.pill.p-high{background:var(--danger-soft);color:var(--danger)}
-.pill.p-low{background:transparent;color:var(--text-3);border:1px solid var(--border)}
-.dot{width:4px;height:4px;border-radius:50%;background:var(--border-strong)}
+/* counters, start */
+.counters{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 16px}
+.counter{background:var(--card);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--line);text-align:start;color:inherit}
+.counter b{display:block;font-family:var(--f-display);font-size:22px;line-height:1.15}
+.counter span{font-size:12px;color:var(--ink-2)}
+.counter.late b{color:var(--late)} .counter.fu b{color:var(--accent)}
+.start{position:relative;background:var(--card);border-radius:var(--r);padding:16px 18px 16px 16px;box-shadow:var(--shadow);margin-bottom:18px;border:1px solid var(--line);overflow:hidden}
+.start::before{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:4px;background:var(--accent)}
+.eyebrow{font-size:12px;font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:6px}
+.start h2{font-family:var(--f-display);font-size:19px;line-height:1.5;margin:8px 0 4px;font-weight:700;overflow-wrap:anywhere}
+.why{font-size:13px;color:var(--ink-2);font-weight:600} .why.late{color:var(--late)}
+.start .row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.hint-swipe{font-size:12px;color:var(--ink-3);text-align:center;margin:0 0 14px}
+.allclear{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--done);font-weight:600;padding:18px;background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+.banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--accent-soft);color:var(--accent-2);border-radius:var(--r-sm);padding:10px 12px;margin:6px 0 12px;font-size:14px}
+.banner span{flex:1;min-width:180px}
 
-/* Start card */
-.start{display:flex;gap:14px;align-items:center;padding:16px 18px;border-radius:var(--radius);background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);margin-bottom:22px;cursor:pointer}
-.start-label{font-size:12px;font-weight:700;color:var(--accent-2);text-transform:uppercase;letter-spacing:.02em}
-.start-title{font-size:17px;font-weight:700;overflow-wrap:anywhere}
-.start-why{font-size:13px;color:var(--text-2)}
+/* sections & cards */
+.sec{margin-bottom:22px}
+.sec-h{display:flex;align-items:center;gap:8px;margin:0 2px 8px}
+.sec-h h3{margin:0;font-size:14px;font-weight:700;color:var(--ink-2)}
+.sec-h .grow{flex:1}
+.cnt{font-size:12px;font-weight:700;background:var(--line);color:var(--ink-2);border-radius:99px;padding:0 8px;line-height:20px}
+.cnt.late{background:var(--late-soft);color:var(--late)}
+.stack{display:flex;flex-direction:column;gap:8px}
+.swipe{position:relative;border-radius:var(--r);overflow:hidden;background:var(--line)}
+.swipe .lbl{position:absolute;top:0;bottom:0;display:flex;align-items:center;gap:6px;padding-inline:18px;font-weight:700;font-size:13px;opacity:0;transition:opacity .15s}
+.swipe .lbl.done{left:0;color:var(--done)} .swipe .lbl.later{right:0;color:var(--wait)}
+.swipe.to-done{background:var(--done-soft)} .swipe.to-done .lbl.done{opacity:1}
+.swipe.to-later{background:var(--wait-soft)} .swipe.to-later .lbl.later{opacity:1}
+.tcard{position:relative;display:flex;gap:12px;align-items:flex-start;background:var(--card);border-radius:var(--r);padding:13px 14px;border:1px solid var(--line);touch-action:pan-y;transition:transform .2s ease;cursor:pointer}
+.tcard:hover{border-color:var(--line-2)}
+.tcard .body{flex:1;min-width:0}
+.tcard .t,.fu-row .t,.prow .t{font-weight:600;line-height:1.5;overflow-wrap:anywhere}
+.tcard.is-done .t{color:var(--ink-3);text-decoration:line-through}
+.meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:5px;font-size:12.5px;color:var(--ink-3);align-items:center}
+.meta svg{vertical-align:-2px}
+.chk{width:24px;height:24px;border-radius:50%;border:2px solid var(--line-2);background:transparent;flex:none;margin-top:1px;display:grid;place-items:center;padding:0}
+.chk:hover{border-color:var(--done);background:var(--done-soft)}
+.chk.on{background:var(--done);border-color:var(--done)}
+.chk svg{width:13px;height:13px;color:#fff}
+.stripe{position:absolute;inset-block:12px;inset-inline-start:0;width:3px;border-radius:3px}
+.stripe.late{background:var(--late)} .stripe.wait{background:var(--wait)}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:0 9px;border-radius:99px;background:var(--line);color:var(--ink-2);white-space:nowrap;line-height:21px}
+.pill.late,.pill.hi{background:var(--late-soft);color:var(--late)} .pill.wait{background:var(--wait-soft);color:var(--wait)}
+.pill.done{background:var(--done-soft);color:var(--done)} .pill.prog{background:var(--accent-soft);color:var(--accent-2)}
+.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:700;flex:none;background:var(--accent-soft);color:var(--accent-2);font-family:var(--f-display)}
+.av.lg{width:44px;height:44px;font-size:17px} .av.xl{width:56px;height:56px;font-size:22px}
+.fu-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.fu-row.late{border-color:color-mix(in srgb,var(--late) 35%,var(--line))}
+.fu-row .body{flex:1;min-width:0;cursor:pointer}
+.prow{display:flex;align-items:center;gap:12px;width:100%;text-align:start;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.prow .body{flex:1;min-width:0;display:flex;flex-direction:column}
+.prow .chev{color:var(--ink-3);transform:scaleX(-1)}
+[dir=ltr] .prow .chev{transform:none}
+.empty{text-align:center;padding:40px 16px;color:var(--ink-2)}
+.empty.small{padding:24px 10px}
+.empty h3{font-family:var(--f-display);color:var(--ink);margin:10px 0 4px;font-size:19px}
+.empty p{margin:0 auto 18px;max-width:34ch}
+.empty-ic{width:56px;height:56px;border-radius:16px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;margin:0 auto;color:var(--accent)}
+.empty-ic svg{width:26px;height:26px}
 
-/* Quick add */
-.quick{display:flex;gap:8px;margin-bottom:20px}
-.quick input{flex:1}
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line-2);background:var(--card);border-radius:12px;padding:0 14px;min-height:42px;font-weight:600;font-size:14px;white-space:nowrap;color:var(--ink)}
+.btn svg{width:18px;height:18px}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{background:var(--accent-2)}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.sm{min-height:34px;padding:0 11px;font-size:13px;border-radius:10px}
+.btn.lg{min-height:50px;font-size:15.5px}
+.btn.block{width:100%;flex:1}
+.btn.ok{background:var(--done-soft);border-color:transparent;color:var(--done)}
+.btn.danger,.danger-btn{color:var(--late)} .danger-btn{background:var(--late);border-color:var(--late);color:#fff}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.iconbtn{width:40px;height:40px;border-radius:12px;border:none;background:transparent;display:grid;place-items:center;color:var(--ink-2);flex:none}
+.iconbtn svg{width:22px;height:22px}
+.iconbtn.sm{width:32px;height:32px} .iconbtn.sm svg{width:18px;height:18px}
+.iconbtn:hover{background:var(--line)}
+[dir=ltr] .flipx svg{transform:scaleX(-1)}
 
-/* Forms */
-.field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
-.field label,.field .lbl{font-size:13px;font-weight:600;color:var(--text-2)}
-.field .hint{font-size:12px;color:var(--text-3)}
-.field .err{font-size:12px;color:var(--danger)}
-input[type=text],input[type=date],input[type=month],input[type=search],select,textarea{width:100%;border:1px solid var(--border-strong);background:var(--surface);border-radius:var(--radius-sm);padding:8px 11px;min-height:38px}
-textarea{min-height:76px;resize:vertical}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:0 14px}
-.radio-row{display:flex;flex-direction:column;gap:6px}
-.radio-row label{display:flex;gap:8px;align-items:center;font-weight:500;color:var(--text);font-size:14px}
-.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
-.filters input[type=search]{flex:1 1 220px;width:auto}
-.filters select{width:auto;flex:0 1 auto}
-.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--radius-sm);overflow:hidden;background:var(--surface)}
-.seg button{border:none;background:transparent;padding:6px 12px;cursor:pointer;font-size:13.5px;font-weight:500;color:var(--text-2);min-height:36px}
-.seg button+button{border-inline-start:1px solid var(--border)}
-.seg button.on{background:var(--accent-soft);color:var(--accent-2)}
+/* search, segments, chips */
+.search{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0 12px;min-height:46px;margin:8px 0 10px}
+.search svg{width:18px;height:18px;color:var(--ink-3);flex:none}
+.search input{flex:1;min-width:0;border:none;background:transparent;outline:none;min-height:44px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--line);border-radius:12px;padding:3px;margin:6px 0 12px}
+.seg button{border:none;background:transparent;border-radius:9px;min-height:36px;font-weight:600;font-size:13px;color:var(--ink-2);padding:0 4px}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.seg2{display:flex;gap:6px;flex-wrap:wrap}
+.seg2 button{flex:1;min-height:40px;border:1px solid var(--line-2);background:var(--card);border-radius:11px;font-weight:600;font-size:13.5px;color:var(--ink-2);padding:0 8px}
+.seg2 button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-2)}
+.people-row{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none}
+.people-row::-webkit-scrollbar{display:none}
+.pchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);border-radius:99px;padding:3px 10px 3px 4px;flex:none;font-size:13px;font-weight:600;color:var(--ink-2)}
+[dir=rtl] .pchip{padding:3px 4px 3px 10px}
+.pchip .av{width:26px;height:26px;font-size:12px}
+.pchip i{font-style:normal;font-size:11px;background:var(--line);border-radius:99px;padding:0 6px}
+.pchip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-2)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chips.top{margin:0 0 10px} .chips.filter{margin:0 0 10px}
+.chip{flex-shrink:0;max-width:100%;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);background:var(--card);border-radius:99px;padding:0 12px;min-height:34px;font-size:13px;font-weight:600;color:var(--ink-2)}
+.chip svg{flex:none}
+.chip.missing{border-style:dashed;border-color:var(--wait);color:var(--wait);background:var(--wait-soft)}
+.chip.hi{border-color:transparent;background:var(--late-soft);color:var(--late)}
+.chip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-2)}
+.chip .wk{font-size:11px;color:var(--wait)}
+.chip.datein{padding-inline-end:4px;position:relative}
+.chip.datein input{border:none;background:transparent;min-height:30px;max-width:150px;font-size:13px;color:inherit}
+.opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 
-/* Detail */
-.detail-head{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px}
-.detail-title{font-size:21px;font-weight:700;margin:0;flex:1;min-width:220px;overflow-wrap:anywhere}
-.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px 18px}
-.kv .k{font-size:12px;color:var(--text-3);font-weight:600}
-.kv .v{font-size:14px;overflow-wrap:anywhere}
-.prose{white-space:pre-wrap;overflow-wrap:anywhere}
-.cols{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;align-items:start}
-.timeline{list-style:none;margin:0;padding:0}
-.timeline li{padding:10px 0;border-top:1px solid var(--border);font-size:14px}
-.timeline li:first-child{border-top:none}
-.timeline .when{font-size:12px;color:var(--text-3)}
-.timeline .sys{color:var(--text-2)}
-.fu{padding:12px 0;border-top:1px solid var(--border)}
+/* sheets */
+.backdrop{position:fixed;inset:0;background:rgba(15,21,34,.45);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
+.backdrop.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;bottom:0;inset-inline:0;margin-inline:auto;max-width:560px;background:var(--card);color:var(--ink);border-radius:22px 22px 0 0;box-shadow:var(--shadow-up);z-index:41;transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);max-height:92vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet.on{transform:none}
+.grab{width:42px;height:5px;border-radius:5px;background:var(--line-2);margin:9px auto 2px;flex:none}
+.sheet-h{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 16px}
+[dir=rtl] .sheet-h{padding:4px 16px 4px 12px}
+.sheet-h h3{flex:1;margin:0;font-family:var(--f-display);font-size:18px;font-weight:600}
+.sheet-b{padding:6px 16px 18px;overflow:auto}
+.form{display:flex;flex-direction:column;gap:14px}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld>span{font-size:13px;font-weight:600;color:var(--ink-2)}
+.fld input:not([type=checkbox]),.fld select,.fld textarea{width:100%;border:1px solid var(--line-2);background:var(--card);border-radius:12px;padding:9px 12px;min-height:44px;font-size:15px;color:var(--ink)}
+.fld textarea{resize:vertical;line-height:1.55}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.save-row{display:flex;gap:8px;margin:4px 0 0}
+.save-row.sticky{position:sticky;bottom:-18px;background:var(--card);padding:10px 0 4px}
+.ctx{margin:0;color:var(--ink-2);font-weight:600;overflow-wrap:anywhere}
+.note{font-size:12.5px;color:var(--ink-3);margin:8px 0 0}
+.warn-txt{color:var(--wait)} .err-txt{color:var(--late)}
+.lab{font-size:12.5px;color:var(--ink-3);font-weight:600;margin-top:14px}
+.tips{font-size:13px;color:var(--ink-3);margin-top:12px;line-height:1.7}
+.composer{border:1.5px solid var(--line-2);border-radius:16px;background:var(--paper);padding:10px 12px;transition:border-color .15s}
+.composer:focus-within{border-color:var(--accent)}
+.composer textarea{width:100%;border:none;background:transparent;resize:none;min-height:56px;max-height:180px;outline:none;font-size:16px;line-height:1.6;color:var(--ink)}
+.tools{display:flex;align-items:center;gap:6px;margin-top:4px;min-height:48px}
+.rec-state{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--late);flex:1}
+.mic{width:48px;height:48px;border-radius:50%;background:var(--accent);color:var(--accent-ink);border:none;display:grid;place-items:center;margin-inline-start:auto}
+.mic svg{width:22px;height:22px}
+.mic.rec{background:var(--late);animation:pulse 1.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--late) 50%,transparent)}100%{box-shadow:0 0 0 16px transparent}}
+.wave{display:flex;align-items:center;gap:3px;height:24px}
+.wave i{width:3px;border-radius:3px;background:var(--late);animation:wv .9s ease-in-out infinite}
+.wave i:nth-child(2){animation-delay:.1s}.wave i:nth-child(3){animation-delay:.2s}.wave i:nth-child(4){animation-delay:.3s}.wave i:nth-child(5){animation-delay:.4s}.wave i:nth-child(6){animation-delay:.5s}.wave i:nth-child(7){animation-delay:.6s}
+@keyframes wv{0%,100%{height:5px}50%{height:22px}}
+.preview{margin-top:12px;border:1.5px solid color-mix(in srgb,var(--accent) 30%,var(--line));border-radius:16px;padding:14px;background:var(--card)}
+.preview .ttl{font-family:var(--f-display);font-weight:600;font-size:16.5px;line-height:1.5;overflow-wrap:anywhere}
+.drow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;font-size:13.5px;color:var(--ink-2)}
+.drow.sub{margin-top:4px;padding-inline-start:24px;color:var(--ink-3);font-size:13px}
+.psel{min-height:34px;border-radius:99px;border:1px solid var(--line-2);background:var(--accent-soft);color:var(--accent-2);font-weight:600;font-size:13px;padding:0 10px;max-width:230px}
+.psel.need{border-color:var(--late);background:var(--late-soft);color:var(--late)}
+.ask{margin-top:12px;background:var(--accent-soft);border-radius:14px;padding:12px}
+.ask p{margin:0;font-weight:600;color:var(--accent-2)}
+.confirm{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(15,21,34,.45);padding:16px}
+.confirm-in{background:var(--card);color:var(--ink);border-radius:18px;padding:20px;max-width:400px;width:100%;box-shadow:var(--shadow-up)}
+.confirm-in p{margin:0 0 16px;font-size:15px}
+.confirm-in .row{display:flex;gap:8px}
+
+/* layers (detail screens) */
+.layer-backdrop{position:fixed;inset:0;z-index:29;background:rgba(15,21,34,.35);opacity:0;pointer-events:none;transition:opacity .2s;display:none}
+.layer{position:fixed;inset:0;background:var(--paper);color:var(--ink);z-index:30;transform:translateX(-100%);transition:transform .28s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column}
+[dir=ltr] .layer{transform:translateX(100%)}
+.layer.on{transform:none!important}
+.layer-top{display:flex;align-items:center;gap:6px;padding:calc(8px + env(safe-area-inset-top,0px)) 8px 8px;border-bottom:1px solid var(--line);background:var(--paper)}
+.layer-top .t{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.layer-b{flex:1;overflow:auto;padding:16px 16px calc(40px + env(safe-area-inset-bottom,0px))}
+.d-title{font-family:var(--f-display);font-size:22px;line-height:1.45;font-weight:600;margin:0 0 8px;overflow-wrap:anywhere}
+.d-text{margin:0 0 10px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.waitbox,.donebox{display:flex;gap:8px;align-items:flex-start;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:14px}
+.waitbox{background:var(--wait-soft);color:var(--wait)}
+.donebox{background:var(--done-soft);color:var(--done);flex-direction:column;gap:2px}
+.donebox p{margin:0;color:var(--ink);white-space:pre-wrap}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.kv>div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0;display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+.kv>div.wide{grid-column:1/-1}
+.kv small{color:var(--ink-3);font-size:12px}
+.kv b{font-weight:600;font-size:14px}
+.stepper{display:flex;align-items:center;gap:8px}
+.progress{height:6px;border-radius:6px;background:var(--line);overflow:hidden;margin-top:6px;width:100%}
+.progress i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.st-row{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 20px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:4px 14px;margin-bottom:18px}
+.fu{padding:12px 0;border-top:1px solid var(--line)}
 .fu:first-child{border-top:none}
-.fu.closed{opacity:.65}
-.fu-log{margin:6px 0 0;padding-inline-start:14px;border-inline-start:2px solid var(--border);font-size:13px;color:var(--text-2)}
-.fu-log div{margin-bottom:4px}
-.done-box{background:var(--ok-soft);border:1px solid color-mix(in srgb,var(--ok) 30%,transparent);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px}
-.links a{display:block;overflow-wrap:anywhere}
+.fu.closed{opacity:.7}
+.fu.muted{color:var(--ink-3)}
+.fu-top{display:flex;align-items:center;gap:10px}
+.fu-top .body{flex:1;min-width:0}
+.fu-log{margin:8px 0 0;padding-inline-start:12px;border-inline-start:2px solid var(--line);font-size:13px;color:var(--ink-2);display:flex;flex-direction:column;gap:4px}
+.fu-log .when{color:var(--ink-3)}
+.fu-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.tl{list-style:none;margin:0;padding:0}
+.tl li{position:relative;padding:10px 0;padding-inline-start:18px;border-top:1px solid var(--line);font-size:14px;display:flex;flex-direction:column;gap:2px}
+.tl li:first-child{border-top:none}
+.tl li::before{content:"";position:absolute;inset-inline-start:2px;top:17px;width:8px;height:8px;border-radius:50%;background:var(--line-2)}
+.tl li.k::before{background:var(--accent)}
+.tl small{color:var(--ink-3);font-size:12px}
+.tl .lt{color:var(--ink-2);white-space:pre-wrap}
+.tl .linkbtn{align-self:flex-start;padding:0;font-size:13px;text-align:start}
+.upd{display:flex;gap:8px;margin:10px 0 4px}
+.upd input{flex:1;min-width:0;border:1px solid var(--line-2);border-radius:12px;padding:0 12px;min-height:42px;background:var(--card);color:var(--ink)}
+.danger-row{display:flex;justify-content:center;gap:8px;margin-top:8px}
+.p-head{display:flex;align-items:center;gap:14px;margin-bottom:14px}
 
-/* Stats */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
-.stat{padding:14px 16px}
-.stat .n{font-size:26px;font-weight:700;line-height:1.2}
-.stat .l{font-size:12.5px;color:var(--text-2)}
+/* more */
+.profile{display:flex;align-items:center;gap:12px;width:100%;text-align:start;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:8px 0 12px;color:var(--ink)}
+.profile .body{flex:1;min-width:0;display:flex;flex-direction:column}
+.profile .mail{direction:ltr;text-align:start;unicode-bidi:plaintext}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:16px}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.menu{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:16px}
+.menu button{display:flex;align-items:center;gap:12px;width:100%;border:none;background:transparent;padding:13px 14px;border-top:1px solid var(--line);text-align:start;font-weight:500;color:var(--ink)}
+.menu button:first-child{border-top:none}
+.menu button:hover{background:var(--paper)}
+.menu button.danger{color:var(--late)}
+.mi{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent-2);flex:none}
+.danger .mi{background:var(--late-soft);color:var(--late)}
+.mi svg{width:19px;height:19px}
+.menu .grow{flex:1;display:flex;flex-direction:column}
+.menu small{color:var(--ink-3);font-size:12.5px}
+.menu .val{font-size:13px;color:var(--accent);font-weight:600}
+.switch{position:relative;width:44px;height:26px;border-radius:99px;background:var(--line-2);flex:none;transition:background .15s}
+.switch::after{content:"";position:absolute;top:3px;inset-inline-start:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:inset-inline-start .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.switch.on{background:var(--done)} .switch.on::after{inset-inline-start:21px}
+.about{text-align:center;color:var(--ink-3);font-size:12.5px}
 
-/* Banner, empty */
-.banner{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--warn-soft);color:var(--warn);font-size:14px;margin-bottom:16px;flex-wrap:wrap}
-.banner .spacer{flex:1}
-.empty{text-align:center;padding:36px 20px;color:var(--text-2)}
-.empty h3{margin:0 0 6px;color:var(--text);font-size:17px}
-.empty p{margin:0 0 16px}
-.muted{color:var(--text-3)}
-.small{font-size:13px}
+/* toast */
+.toast{position:fixed;left:50%;transform:translate(-50%,16px);bottom:calc(96px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);border-radius:12px;padding:10px 14px;font-size:14px;z-index:70;opacity:0;transition:all .2s;display:flex;gap:14px;align-items:center;max-width:calc(100% - 32px);pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast.err{background:var(--late);color:#fff}
+.toast button{border:none;background:transparent;color:#C9D4EA;font-weight:700;padding:0}
 
-/* Dialog */
-dialog{border:none;border-radius:14px;padding:0;width:min(620px,calc(100vw - 24px));max-height:calc(100vh - 32px);background:var(--surface);color:var(--text);box-shadow:0 20px 50px rgba(0,0,0,.25)}
-dialog::backdrop{background:rgba(15,18,22,.45)}
-.dlg-head{display:flex;align-items:center;gap:8px;padding:16px 20px;border-bottom:1px solid var(--border)}
-.dlg-head h3{margin:0;font-size:17px;flex:1}
-.dlg-body{padding:18px 20px 4px;overflow:auto;max-height:calc(100vh - 170px)}
-.dlg-foot{display:flex;gap:8px;justify-content:flex-end;padding:12px 20px 16px;border-top:1px solid var(--border);flex-wrap:wrap}
-#confirm{width:min(440px,calc(100vw - 24px))}
-#confirm .dlg-body{padding:20px}
-
-/* Toast */
-.toast{position:fixed;inset-inline-start:50%;transform:translateX(-50%);bottom:24px;background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;box-shadow:var(--shadow);max-width:calc(100vw - 32px)}
-[dir=rtl] .toast{transform:translateX(50%)}
-.toast.error{background:var(--danger);color:#fff}
-
-/* Welcome */
-.welcome{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:40;padding:16px}
-.welcome .card{padding:32px;text-align:center;max-width:420px;width:100%}
-.welcome .brand-mark{width:56px;height:56px;font-size:28px;margin:0 auto 14px;border-radius:14px}
-.welcome .btn-group{justify-content:center;margin-top:20px}
-.welcome .btn{min-width:130px;min-height:44px;font-size:15px}
-
-.print-only{display:none}
-.main:focus{outline:none}
-[dir=rtl] .flip svg,[dir=rtl] svg.flip{transform:scaleX(-1)}
-
-/* Folder status chip */
-.fs-chip{display:flex;align-items:center;justify-content:center;gap:7px;font-size:12.5px;color:var(--text-2);background:transparent;border:1px solid var(--border);border-radius:99px;padding:4px 10px;cursor:pointer;text-decoration:none;font-weight:500}
-.fs-chip .d{width:8px;height:8px;border-radius:50%;background:var(--border-strong)}
-.fs-chip.ok .d{background:var(--ok)}
-.fs-chip.warn{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
-.fs-chip.warn .d{background:var(--warn)}
-
-/* Chat drawer */
-.chat{position:fixed;top:0;bottom:0;inset-inline-end:0;width:min(460px,100vw);background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:0 0 40px rgba(0,0,0,.15);z-index:30;display:flex;flex-direction:column}
-.chat-head{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--border)}
-.chat-head h3{margin:0;font-size:16px}
-.engine{font-size:11.5px;padding:1px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent-2);font-weight:700;text-decoration:none}
-.engine.local{background:var(--muted-soft);color:var(--text-2)}
-.chat-body{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
-.msg{max-width:88%;padding:9px 12px;border-radius:14px;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
-.msg.user{align-self:flex-end;background:var(--accent);color:var(--on-accent)}
-.msg.bot{align-self:flex-start;background:var(--surface-2)}
-.msg.note{align-self:stretch;max-width:none;background:var(--warn-soft);color:var(--warn);font-size:12.5px;border-radius:8px;padding:6px 10px}
-.msg.typing{color:var(--text-3);font-style:italic}
-.drafts{align-self:stretch;display:flex;flex-direction:column;gap:8px}
-.drafts.stale,.drafts.discarded{opacity:.5}
-.draft-card{border:1px solid var(--border-strong);border-radius:12px;padding:12px;background:var(--surface)}
-.drafts.active .draft-card{border-color:color-mix(in srgb,var(--accent) 45%,var(--border))}
-.draft-title{font-weight:700;font-size:15px;overflow-wrap:anywhere}
-.draft-line{font-size:13px;color:var(--text-2);display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;overflow-wrap:anywhere}
-.draft-line select{width:auto;min-height:30px;padding:2px 8px;font-size:13px;max-width:220px}
-.draft-line select.need{border-color:var(--danger);background:var(--danger-soft)}
-.chat-actions{display:flex;gap:8px;flex-wrap:wrap}
-.chat-foot{border-top:1px solid var(--border);padding:10px;display:flex;gap:8px;align-items:flex-end;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
-.chat-foot textarea{min-height:42px;max-height:160px;resize:none;flex:1}
-.chat-foot .btn{min-height:42px;padding:0 12px}
-.chat-foot .btn svg{width:18px;height:18px}
-[dir=rtl] .chat-foot button[type=submit] svg{transform:scaleX(-1)}
-.mic.on{background:var(--danger-soft);color:var(--danger);border-color:var(--danger)}
-
-/* Responsive */
-@media (max-width: 900px){
-  .cols{grid-template-columns:1fr}
-  .stats{grid-template-columns:repeat(2,1fr)}
+/* wide screens: sidebar + side panels + centered sheets */
+@media (min-width:960px){
+  #app{display:grid;grid-template-columns:248px 1fr}
+  #app.bare{display:block}
+  [dir=ltr] #app{grid-template-columns:248px 1fr}
+  #nav{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:18px 12px;border-top:none;border-inline-end:1px solid var(--line);background:var(--card);backdrop-filter:none}
+  .nav-brand{display:flex;align-items:center;gap:10px;padding:2px 8px 18px;font-family:var(--f-display);font-size:18px;order:-2}
+  .addbtn{order:-1;width:auto;height:46px;border-radius:12px;transform:none;display:flex;gap:8px;justify-content:center;margin-bottom:14px;box-shadow:none;font-weight:600}
+  .addbtn .lbl{display:inline} .addbtn svg{width:20px;height:20px}
+  .tab{flex-direction:row;gap:12px;font-size:14.5px;padding:10px 12px;border-radius:10px;justify-content:flex-start;color:var(--ink-2)}
+  .tab svg{width:21px;height:21px}
+  .tab:hover{background:var(--paper)}
+  .tab.on{background:var(--accent-soft);color:var(--accent-2)}
+  .tab .dot{position:static;margin-inline-start:auto}
+  .nav-foot{display:block;margin-top:auto;padding:8px}
+  main{padding:20px 28px 60px;width:100%}
+  .hdr h1{font-size:28px}
+  .desk{display:inline-flex}
+  .hdr-side{display:none}
+  .layer-backdrop{display:block}
+  .layer-backdrop.on{opacity:1;pointer-events:auto}
+  .layer{inset-inline-start:auto;width:min(620px,92vw);box-shadow:var(--shadow-up)}
+  [dir=rtl] .layer{left:0;right:auto;transform:translateX(-105%)} [dir=ltr] .layer{right:0;left:auto;transform:translateX(105%)}
+  .sheet{bottom:auto;top:50%;border-radius:20px;transform:translate(0,-46%) scale(.98);opacity:0;pointer-events:none;transition:transform .2s,opacity .2s;max-height:86vh}
+  .sheet.on{transform:translate(0,-50%);opacity:1;pointer-events:auto}
+  .grab{display:none}
+  .toast{bottom:28px}
 }
-@media (max-width: 720px){
-  .app{grid-template-columns:1fr}
-  .sidebar{display:none}
-  .main{padding:12px 16px 110px}
-  .mobile-head{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
-  .mobile-head .spacer{flex:1}
-  .bottom-nav{display:flex;position:fixed;bottom:0;inset-inline:0;background:var(--surface);border-top:1px solid var(--border);z-index:10;padding-bottom:env(safe-area-inset-bottom)}
-  .bottom-nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;font-size:11px;color:var(--text-3);text-decoration:none;min-height:54px}
-  .bottom-nav a.active{color:var(--accent)}
-  .bottom-nav svg{width:21px;height:21px}
-  .fab{display:grid;place-items:center;position:fixed;bottom:calc(70px + env(safe-area-inset-bottom));inset-inline-end:16px;width:54px;height:54px;border-radius:50%;background:var(--accent);color:var(--on-accent);border:none;box-shadow:0 6px 16px rgba(0,0,0,.2);z-index:11;cursor:pointer}
-  .fab svg{width:24px;height:24px}
-  .topbar .desk-only{display:none}
-  .grid2,.grid3{grid-template-columns:1fr}
-  .row{padding:12px}
-  .row-side .btn-txt{display:none}
-}
-
-/* Print */
-@media print{
-  @page{size:A4;margin:14mm}
-  body{background:#fff;color:#000;font-size:12px}
-  .sidebar,.bottom-nav,.fab,.mobile-head,.no-print,.toast,dialog,.chat{display:none!important}
-  .app{display:block}
-  .main{padding:0;max-width:none}
-  .card{box-shadow:none;border-color:#ccc}
-  .row{cursor:default;break-inside:avoid}
-  .print-only{display:block}
-  .check{display:none!important}
-  .stats{grid-template-columns:repeat(4,1fr)}
-  a{color:#000;text-decoration:none}
-}
+@media (max-width:420px){ .grid2{grid-template-columns:1fr} }
+@media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important} }
 </style>
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script>window.RAFEEQ_VERSION = '2.0.0';</script>
 </head>
 <body>
-<noscript>يحتاج هذا التطبيق إلى تفعيل JavaScript. / This app requires JavaScript.</noscript>
-
-<div class="app" id="app">
-  <aside class="sidebar" id="sidebar"></aside>
-  <div>
-    <header class="mobile-head" id="mobileHead"></header>
-    <main class="main" id="main" tabindex="-1"></main>
+<div class="shell" id="shell" dir="rtl">
+  <div id="splash"><div class="brand-mark">ر</div></div>
+  <section class="login" id="login" hidden></section>
+  <div id="app" hidden>
+    <nav id="nav" aria-label="التنقل"></nav>
+    <main id="main" tabindex="-1"></main>
   </div>
+  <div id="layerBackdrop" class="layer-backdrop"></div>
+  <div id="layers"></div>
+  <div class="backdrop" id="backdrop"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+  <div class="confirm" id="confirm" hidden role="alertdialog" aria-modal="true"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
-<nav class="bottom-nav" id="bottomNav"></nav>
-<button class="fab" id="fab" data-action="chat-open" type="button"></button>
-
-<dialog id="dlg"></dialog>
-<dialog id="confirm"></dialog>
-<div id="welcome" class="welcome" hidden></div>
-<aside id="chat" class="chat" hidden aria-label="chat"></aside>
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-
-<script>
-'use strict';
-/* =========================================================
-   رفيق — Rafeeq · personal work organizer
-   Data stays in this browser (localStorage). No server.
-   ========================================================= */
-
-const APP_VERSION = '1.1.0';
-const STORE_KEY = 'rafeeq.v1';
-
-/* ---------- i18n ---------- */
-const I18N = {
-  ar: {
-    appName:'رفيق', tagline:'تنظيم الأعمال والمتابعات والإنجازات',
-    nav_today:'يومي', nav_tasks:'المهام', nav_people:'الأشخاص', nav_wins:'الإنجازات', nav_settings:'الإعدادات',
-    newTask:'مهمة جديدة', editTask:'تعديل المهمة', quickAddPh:'اكتب المهمة بكلامك واضغط Enter', add:'إضافة',
-    status_not_started:'لم تبدأ', status_in_progress:'جارٍ التنفيذ', status_waiting:'بانتظار', status_paused:'متوقفة', status_done:'مكتملة', status_cancelled:'ملغاة',
-    prio_high:'عالية', prio_medium:'متوسطة', prio_low:'منخفضة', prioLabel:'أولوية {p}',
-    priority:'الأولوية', status:'الحالة', due:'موعد التسليم', noDue:'بدون موعد', role:'دوري في المهمة',
-    role_exec:'تنفيذ شخصي', role_follow:'متابعة تنفيذ', role_both:'تنفيذ ومتابعة',
-    title:'العنوان', desc:'المطلوب والتفاصيل', project:'الملف أو المشروع', projectHint:'اختياري — لتجميع المهام المرتبطة',
-    source:'مصدر التكليف', sourcePh:'مثال: المدير المباشر',
-    waitingOn:'بانتظار مَن', waitingWhat:'بانتظار ماذا', wait_reply:'رد', wait_decision:'قرار', wait_approval:'اعتماد',
-    waitingLine:'بانتظار {w} من {p}', waitingLineNoP:'بانتظار {w}',
-    links:'روابط ومسارات الملفات', linksHint:'رابط أو مسار ملف في كل سطر', notes:'ملاحظات شخصية', notesHint:'لا تظهر في التقارير',
-    save:'حفظ', saveAndNew:'حفظ وإضافة أخرى', cancel:'إلغاء', edit:'تعديل', del:'حذف', close:'إغلاق', back:'رجوع', open:'فتح',
-    today:'اليوم', tomorrow:'غدًا', yesterday:'أمس',
-    overdueBy:'متأخرة {d}', dueToday:'مستحقة اليوم', dueOn:'الموعد {d}',
-    sec_overdue:'متأخر', sec_today:'مستحق اليوم', sec_followups:'متابعات مستحقة', sec_waiting:'بانتظار الآخرين', sec_upcoming:'خلال الأيام السبعة القادمة', sec_progress:'جارٍ العمل عليها بدون موعد',
-    startWith:'ابدأ بـ', why_overdue:'متأخرة {d}', why_today:'مستحقة اليوم', why_high:'أولوية عالية', why_progress:'جارٍ التنفيذ', why_next:'الأقرب موعدًا',
-    allClear:'لا يوجد شيء مستحق اليوم.', allClearHint:'راجع قائمة المهام أو أضف عملًا جديدًا.',
-    emptyTitle:'ابدأ بإضافة أول مهمة', emptyHint:'اكتب المهمة في الخانة بالأعلى واضغط Enter، أو استخدم زر «مهمة جديدة» لإضافة التفاصيل.',
-    followups:'المتابعات', addFollowup:'إضافة متابعة', editFollowup:'تعديل المتابعة', person:'الشخص أو الجهة', personHint:'اكتب الاسم؛ يُضاف تلقائيًا إن كان جديدًا', what:'المطلوب منه', followDue:'موعد المتابعة',
-    recordResult:'تسجيل نتيجة', contactDate:'تاريخ التواصل', method:'طريقة التواصل',
-    m_call:'اتصال', m_whatsapp:'واتساب', m_email:'بريد إلكتروني', m_meeting:'اجتماع', m_visit:'زيارة', m_other:'أخرى',
-    resultText:'ما تم / الرد', outcome:'النتيجة', outcome_done:'تم المطلوب — إغلاق المتابعة', outcome_again:'يحتاج متابعة أخرى', nextDue:'موعد المتابعة التالية',
-    fu_open:'مفتوحة', fu_closed:'مغلقة', noFollowups:'لا توجد متابعات.', forTask:'ضمن: {t}', closedOn:'أُغلقت {d}', reopenFu:'إعادة فتح',
-    updates:'سجل التقدم', addUpdate:'إضافة تحديث', updatePh:'ماذا حدث؟ ما الخطوة التالية؟', noUpdates:'لا توجد تحديثات بعد.',
-    complete:'إكمال', completeTask:'إكمال المهمة', completedOn:'تاريخ الإنجاز الفعلي', result:'النتيجة', resultPh:'ما الذي تحقق؟',
-    deliverable:'رابط التسليم النهائي', reopen:'إعادة فتح', archive:'أرشفة', unarchive:'إلغاء الأرشفة', archived:'مؤرشفة',
-    completedBox:'اكتملت في {d}',
-    log_created:'أُنشئت المهمة', log_status:'تغيرت الحالة: {a} ← {b}', log_due:'تغير الموعد إلى: {d}', log_completed:'اكتملت المهمة', log_reopened:'أُعيد فتحها (كانت مكتملة في {d})',
-    log_fu:'متابعة مع {p} ({m})', log_fu_added:'أُضيفت متابعة مع {p}: {w}', log_fu_closed:'أُغلقت المتابعة مع {p}', log_archived:'أُرشفت', log_unarchived:'أُلغيت الأرشفة',
-    search:'بحث في المهام…', allStatuses:'كل الحالات', active:'النشطة', completedF:'المكتملة', archivedF:'المؤرشفة', allF:'الكل',
-    allPeople:'كل الأشخاص', allProjects:'كل الملفات', allPrio:'كل الأولويات', noResults:'لا توجد نتائج مطابقة.', countTasks:'{n} مهمة', tk0:'لا توجد مهام', tk1:'مهمة واحدة', tk2:'مهمتان', tkFew:'{n} مهام', tkMany:'{n} مهمة',
-    people:'الأشخاص والجهات', addPerson:'إضافة شخص أو جهة', editPerson:'تعديل البيانات', name:'الاسم', org:'الجهة / الإدارة', contact:'بيانات التواصل', personNotes:'ملاحظات',
-    openFollowups:'متابعات مفتوحة', waitingTasks:'أعمال بانتظاره', contactHistory:'سجل التواصل', relatedTasks:'الأعمال المرتبطة', lastContact:'آخر تواصل: {d}', noContact:'لا يوجد تواصل مسجل',
-    emptyPeople:'لا يوجد أشخاص بعد', emptyPeopleHint:'يُضاف الشخص تلقائيًا عند كتابة اسمه في متابعة أو في حقل «بانتظار مَن».',
-    deletedPerson:'(محذوف)', nameExists:'يوجد شخص بهذا الاسم بالفعل.',
-    winsTitle:'حصاد الشهر', month:'الشهر', st_completed:'أعمال مكتملة', st_fuClosed:'متابعات أُغلقت', st_contacts:'تواصلات مسجلة', st_progress:'أعمال بها تقدم',
-    completedList:'الأعمال المكتملة', progressList:'تقدم مسجل في أعمال مستمرة', blockedNow:'معلّق حاليًا', blockedNote:'يعكس هذا القسم الوضع الحالي اليوم، وليس وضع نهاية الشهر المختار.',
-    roleSplit:'تنفيذ شخصي {a} · متابعة تنفيذ {b} · الاثنان {c}', summary:'ملخص أو تعليق شخصي', summaryPh:'يظهر في أعلى التقرير عند الطباعة', print:'طباعة / حفظ PDF',
-    noWins:'لا توجد أعمال مكتملة في هذا الشهر.', noProgress:'لا يوجد تقدم مسجل.', updatesN:'{n} تحديث', upd1:'تحديث واحد', upd2:'تحديثان', updFew:'{n} تحديثات', updMany:'{n} تحديثًا', lastUpd:'آخر تحديث: {t}', reportFor:'تقرير شهر {m}', generatedOn:'أُعد في {d}',
-    settings:'الإعدادات', language:'اللغة', backup:'النسخ الاحتياطي', backupHint:'بياناتك محفوظة في هذا المتصفح على هذا الجهاز فقط. صدّر نسخة احتياطية بانتظام واحفظها في مكان آمن (مثل OneDrive أو Google Drive).',
-    exportBtn:'تصدير نسخة احتياطية', importBtn:'استيراد نسخة احتياطية', lastBackup:'آخر نسخة احتياطية: {d}', neverBackup:'لم تُصدَّر أي نسخة احتياطية بعد.',
-    importConfirm:'سيتم استبدال جميع البيانات الحالية ببيانات الملف ({t} مهمة، {p} شخص). هل تريد المتابعة؟', importOk:'تم استيراد البيانات.', importBad:'الملف غير صالح أو ليس نسخة احتياطية من رفيق.', replace:'استبدال',
-    storageTitle:'حماية التخزين', persistOn:'التخزين محمي من الحذف التلقائي في هذا المتصفح.', persistOff:'قد يحذف المتصفح البيانات تلقائيًا عند امتلاء المساحة. اطلب الحماية، وثبّت التطبيق إن أمكن.', persistBtn:'طلب الحماية', persistNA:'المتصفح لا يدعم طلب الحماية.',
-    dataInfo:'المحفوظ حاليًا: {t} مهمة، {p} شخص', dangerZone:'حذف البيانات', clearAll:'حذف جميع البيانات',
-    clearConfirm:'سيتم حذف جميع المهام والأشخاص من هذا المتصفح نهائيًا. صدّر نسخة احتياطية أولًا إن لم تفعل. هل تريد المتابعة؟', cleared:'تم حذف جميع البيانات.',
-    backupBanner:'مرّ أكثر من ٧ أيام دون نسخة احتياطية.', backupNow:'صدّر الآن', exported:'تم تصدير النسخة الاحتياطية.',
-    chooseLang:'اختر لغة الواجهة', saved:'تم الحفظ', deleted:'تم الحذف', saveFailed:'تعذّر الحفظ في المتصفح. تحقق من مساحة التخزين أو إعدادات الخصوصية.',
-    storageUnavailable:'التخزين المحلي غير متاح في هذا المتصفح؛ لن تُحفظ البيانات بعد إغلاق الصفحة.',
-    unsaved:'لديك تعديلات غير محفوظة. هل تريد الخروج دون حفظ؟', discard:'خروج دون حفظ', keepEditing:'متابعة التعديل',
-    delTaskConfirm:'حذف هذه المهمة نهائيًا مع متابعاتها وسجلها؟', delPersonConfirm:'حذف هذا الشخص؟ ستبقى المتابعات المرتبطة به ويظهر اسمه «(محذوف)».', delFuConfirm:'حذف هذه المتابعة؟',
-    required:'هذا الحقل مطلوب', notFound:'العنصر غير موجود.', about:'حول التطبيق', aboutText:'رفيق — الإصدار {v}. يعمل دون اتصال بعد أول فتح، ولا يرسل أي بيانات إلى أي خادم.',
-    shortcut:'اختصارات: / للمحادثة · N لنموذج مهمة', langSwitch:'English', from:'من: {s}', nextFu:'المتابعة القادمة: {p} — {d}', moreActions:'إجراءات',
-    chatOpen:'اكتب لرفيق', chatPh:'اكتب المهمة بكلامك…', chatHello:'اكتب لي شغلك بكلامك العادي وأنا أرتّبه. مثال:\n«لازم أخلص تقرير الشكاوى قبل الخميس، وأتابع مع عدنان بكرة عشان يعتمد النموذج»\nلو فيه حاجة ناقصة هسألك، ولا شيء يُحفظ إلا بعد موافقتك.',
-    chatSend:'إرسال', chatMic:'إدخال صوتي', chatClear:'جديدة', chatForm:'نموذج', chatClose:'إغلاق', chatThinking:'جارٍ الفهم…', chatNotTask:'أنا هنا لتسجيل المهام. اكتب لي المطلوب وموعده ومع مَن.', engineLocal:'تحليل مبسط', micDenied:'لم يُسمح باستخدام الميكروفون.',
-    draftSave:'حفظ', draftSaveAll:'حفظ الكل ({n})', draftDiscard:'إلغاء', draftSavedMsg:'تم الحفظ ✓', draftDiscardedMsg:'أُلغيت.', draftStale:'استُبدلت بنسخة أحدث.', draftNew:'جديد', draftChoose:'اختر الشخص…', draftNeedChoice:'اختر الشخص المقصود قبل الحفظ.', draftPast:'تاريخ مضى', draftHint:'للتعديل اكتب هنا، مثل: «خلي الموعد الأحد».', localHint:'التحليل المبسط لا يعدّل المسودة بالكتابة؛ احفظها ثم عدّل المهمة، أو ألغها وأعد الصياغة.', draftFu:'متابعة مع', draftWaiting:'بانتظار {w} من', draftNoDue:'بدون موعد',
-    fbNoKey:'المساعد الذكي غير مفعّل، فاستخدمت التحليل المبسط. فعّله من الإعدادات.', fbQuota:'وصلت للحد المجاني المتاح حاليًا، فاستخدمت التحليل المبسط.', fbOffline:'لا يوجد اتصال بالإنترنت، فاستخدمت التحليل المبسط.', fbBadKey:'مفتاح Gemini غير صالح، فاستخدمت التحليل المبسط. راجع الإعدادات.', fbError:'تعذّر الوصول إلى Gemini، فاستخدمت التحليل المبسط.', fbParse:'لم أفهم رد Gemini، فاستخدمت التحليل المبسط.', localNote:'تحليل مبسط — راجع البيانات قبل الحفظ.',
-    aiTitle:'المساعد الذكي (Gemini)', aiOn:'مفعّل ✓', aiOff:'غير مفعّل — يُستخدم التحليل المبسط.', aiKey:'مفتاح Gemini API', aiKeyHint:'يُحفظ على هذا الجهاز فقط، ولا يُضمَّن في النسخ الاحتياطية أو مجلد الحفظ.', aiGetKey:'الحصول على مفتاح مجاني', aiSaveKey:'حفظ المفتاح', aiTest:'اختبار الاتصال', aiRemove:'حذف المفتاح', aiModel:'النموذج', aiTestOk:'الاتصال يعمل ✓ ({m})', aiTestFail:'فشل الاتصال: {e}', aiKeySaved:'تم حفظ المفتاح.', aiKeyRemoved:'تم حذف المفتاح.', aiTesting:'جارٍ الاختبار…',
-    aiPrivacy:'عند استخدام المحادثة يُرسل نص رسالتك إلى Google Gemini. أسماء الأشخاص المسجلين تُستبدل برموز قبل الإرسال، أما الاسم الجديد فيُرسل كما هو أول مرة فقط. في الخطة المجانية تستخدم Google المحتوى لتحسين منتجاتها، فتجنّب كتابة معلومات سرية.',
-    fsTitle:'الحفظ التلقائي في مجلد', fsUnsupported:'متصفحك لا يدعم الحفظ في مجلد. استخدم Chrome أو Edge على الكمبيوتر، وحتى ذلك الحين صدّر نسخة احتياطية يدويًا.', fsNoneText:'اربط مجلدًا على جهازك ليُحفظ فيه كل تعديل تلقائيًا مع نسخة يومية. اختر مجلدًا داخل OneDrive أو Google Drive لتُرفع البيانات إلى السحابة أيضًا، وسيُنشأ بداخله مجلد Rafeeq.', fsPick:'اختيار مجلد الحفظ', fsChange:'تغيير المجلد', fsUnlink:'إلغاء الربط', fsConnected:'يحفظ تلقائيًا في المجلد «{n}».', fsLast:'آخر حفظ: {t}', fsNeedPerm:'المجلد «{n}» مربوط، ويحتاج تأكيد الصلاحية لمتابعة الحفظ.', fsReconnect:'متابعة الحفظ', fsErr:'تعذّر الحفظ في المجلد: {e}', fsSnapshots:'النسخ اليومية', fsSnapHint:'نسخة لكل يوم تعمل فيه، ويُحتفظ بآخر 60 يومًا.', fsRestore:'استعادة', fsRestoreConfirm:'استعادة بيانات {d}؟ ستُحفظ نسخة من بياناتك الحالية في المجلد قبل الاستعادة.', fsRestored:'تمت الاستعادة.', fsNoSnaps:'لا توجد نسخ بعد.', fsLoadEmpty:'وُجدت بيانات محفوظة في هذا المجلد ({t} مهمة، {p} شخص). هل تريد تحميلها؟', fsNewer:'بيانات المجلد أحدث من بيانات هذا المتصفح (آخر حفظ {d}). أيهما تستخدم؟', fsUseFolder:'بيانات المجلد', fsKeepLocal:'بيانات المتصفح', fsLoad:'تحميل', fsLinked:'تم ربط المجلد، والحفظ التلقائي يعمل.', fsUnlinked:'تم إلغاء الربط.', fsChipOk:'محفوظ في المجلد', fsChipPerm:'اضغط لمتابعة الحفظ', fsChipNone:'غير مربوط بمجلد', fsChipErr:'خطأ في الحفظ', fsBanner:'الحفظ التلقائي متوقف حتى تؤكد صلاحية المجلد.', linkFolder:'ربط مجلد', snapSafety:'قبل الاستعادة',
-    days1:'يوم واحد', days2:'يومين', daysFew:'{n} أيام', daysMany:'{n} يومًا'
-  },
-  en: {
-    appName:'Rafeeq', tagline:'Organize work, follow-ups and achievements',
-    nav_today:'My Day', nav_tasks:'Tasks', nav_people:'People', nav_wins:'Achievements', nav_settings:'Settings',
-    newTask:'New task', editTask:'Edit task', quickAddPh:'Describe a task in your own words and press Enter', add:'Add',
-    status_not_started:'Not started', status_in_progress:'In progress', status_waiting:'Waiting', status_paused:'On hold', status_done:'Done', status_cancelled:'Cancelled',
-    prio_high:'High', prio_medium:'Medium', prio_low:'Low', prioLabel:'{p} priority',
-    priority:'Priority', status:'Status', due:'Due date', noDue:'No due date', role:'My role',
-    role_exec:'Doing it myself', role_follow:'Following up execution', role_both:'Both',
-    title:'Title', desc:'Details', project:'Project / file', projectHint:'Optional — groups related tasks',
-    source:'Assigned by', sourcePh:'e.g. Line manager',
-    waitingOn:'Waiting on', waitingWhat:'Waiting for', wait_reply:'a reply', wait_decision:'a decision', wait_approval:'approval',
-    waitingLine:'Waiting for {w} from {p}', waitingLineNoP:'Waiting for {w}',
-    links:'File links & paths', linksHint:'One link or file path per line', notes:'Personal notes', notesHint:'Never shown in reports',
-    save:'Save', saveAndNew:'Save & add another', cancel:'Cancel', edit:'Edit', del:'Delete', close:'Close', back:'Back', open:'Open',
-    today:'Today', tomorrow:'Tomorrow', yesterday:'Yesterday',
-    overdueBy:'Overdue {d}', dueToday:'Due today', dueOn:'Due {d}',
-    sec_overdue:'Overdue', sec_today:'Due today', sec_followups:'Follow-ups due', sec_waiting:'Waiting on others', sec_upcoming:'Next 7 days', sec_progress:'In progress, no due date',
-    startWith:'Start with', why_overdue:'Overdue {d}', why_today:'Due today', why_high:'High priority', why_progress:'In progress', why_next:'Nearest due date',
-    allClear:'Nothing is due today.', allClearHint:'Review your task list or add new work.',
-    emptyTitle:'Add your first task', emptyHint:'Type it in the box above and press Enter, or use “New task” to add details.',
-    followups:'Follow-ups', addFollowup:'Add follow-up', editFollowup:'Edit follow-up', person:'Person or party', personHint:'Type a name; new names are added automatically', what:'What you need from them', followDue:'Follow-up date',
-    recordResult:'Log result', contactDate:'Contact date', method:'Method',
-    m_call:'Call', m_whatsapp:'WhatsApp', m_email:'Email', m_meeting:'Meeting', m_visit:'Visit', m_other:'Other',
-    resultText:'What happened / reply', outcome:'Outcome', outcome_done:'Done — close follow-up', outcome_again:'Needs another follow-up', nextDue:'Next follow-up date',
-    fu_open:'Open', fu_closed:'Closed', noFollowups:'No follow-ups.', forTask:'In: {t}', closedOn:'Closed {d}', reopenFu:'Reopen',
-    updates:'Progress log', addUpdate:'Add update', updatePh:'What happened? What is next?', noUpdates:'No updates yet.',
-    complete:'Complete', completeTask:'Complete task', completedOn:'Actual completion date', result:'Result', resultPh:'What was achieved?',
-    deliverable:'Final deliverable link', reopen:'Reopen', archive:'Archive', unarchive:'Unarchive', archived:'Archived',
-    completedBox:'Completed on {d}',
-    log_created:'Task created', log_status:'Status changed: {a} → {b}', log_due:'Due date changed to: {d}', log_completed:'Task completed', log_reopened:'Reopened (was completed on {d})',
-    log_fu:'Follow-up with {p} ({m})', log_fu_added:'Follow-up added with {p}: {w}', log_fu_closed:'Follow-up with {p} closed', log_archived:'Archived', log_unarchived:'Unarchived',
-    search:'Search tasks…', allStatuses:'All statuses', active:'Active', completedF:'Completed', archivedF:'Archived', allF:'All',
-    allPeople:'All people', allProjects:'All projects', allPrio:'All priorities', noResults:'No matching results.', countTasks:'{n} tasks',
-    people:'People & parties', addPerson:'Add person or party', editPerson:'Edit details', name:'Name', org:'Organization / department', contact:'Contact details', personNotes:'Notes',
-    openFollowups:'Open follow-ups', waitingTasks:'Work waiting on them', contactHistory:'Contact history', relatedTasks:'Related work', lastContact:'Last contact: {d}', noContact:'No contact logged',
-    emptyPeople:'No people yet', emptyPeopleHint:'People are added automatically when you type a name in a follow-up or in “Waiting on”.',
-    deletedPerson:'(deleted)', nameExists:'A person with this name already exists.',
-    winsTitle:'Monthly harvest', month:'Month', st_completed:'Completed', st_fuClosed:'Follow-ups closed', st_contacts:'Contacts logged', st_progress:'Tasks with progress',
-    completedList:'Completed work', progressList:'Progress on ongoing work', blockedNow:'Currently blocked', blockedNote:'This section reflects the current state today, not the state at the end of the selected month.',
-    roleSplit:'Myself {a} · Following up {b} · Both {c}', summary:'Summary or personal comment', summaryPh:'Shown at the top of the printed report', print:'Print / Save PDF',
-    noWins:'No completed work this month.', noProgress:'No progress logged.', updatesN:'{n} updates', lastUpd:'Last update: {t}', reportFor:'Report for {m}', generatedOn:'Generated {d}',
-    settings:'Settings', language:'Language', backup:'Backup', backupHint:'Your data lives only in this browser on this device. Export a backup regularly and keep it somewhere safe (e.g. OneDrive or Google Drive).',
-    exportBtn:'Export backup', importBtn:'Import backup', lastBackup:'Last backup: {d}', neverBackup:'No backup exported yet.',
-    importConfirm:'All current data will be replaced with the file’s data ({t} tasks, {p} people). Continue?', importOk:'Data imported.', importBad:'This file is not a valid Rafeeq backup.', replace:'Replace',
-    storageTitle:'Storage protection', persistOn:'Storage is protected from automatic clearing in this browser.', persistOff:'The browser may clear data when space runs low. Request protection, and install the app if possible.', persistBtn:'Request protection', persistNA:'This browser does not support storage protection.',
-    dataInfo:'Stored now: {t} tasks, {p} people', dangerZone:'Delete data', clearAll:'Delete all data',
-    clearConfirm:'All tasks and people will be permanently deleted from this browser. Export a backup first if you have not. Continue?', cleared:'All data deleted.',
-    backupBanner:'More than 7 days since your last backup.', backupNow:'Export now', exported:'Backup exported.',
-    chooseLang:'Choose interface language', saved:'Saved', deleted:'Deleted', saveFailed:'Could not save in the browser. Check storage space or privacy settings.',
-    storageUnavailable:'Local storage is not available in this browser; data will not persist after closing the page.',
-    unsaved:'You have unsaved changes. Leave without saving?', discard:'Leave without saving', keepEditing:'Keep editing',
-    delTaskConfirm:'Permanently delete this task with its follow-ups and log?', delPersonConfirm:'Delete this person? Their follow-ups remain and show “(deleted)”.', delFuConfirm:'Delete this follow-up?',
-    required:'This field is required', notFound:'Item not found.', about:'About', aboutText:'Rafeeq — version {v}. Works offline after the first visit and never sends data to any server.',
-    shortcut:'Shortcuts: / chat · N task form', langSwitch:'العربية', from:'From: {s}', nextFu:'Next follow-up: {p} — {d}', moreActions:'Actions',
-    chatOpen:'Tell Rafeeq', chatPh:'Describe the task in your own words…', chatHello:'Tell me about your work in plain words and I will organize it. Example:\n“Finish the complaints report before Thursday, and follow up with Adnan tomorrow to approve the form”\nIf something essential is missing I will ask, and nothing is saved until you confirm.',
-    chatSend:'Send', chatMic:'Voice input', chatClear:'New', chatForm:'Form', chatClose:'Close', chatThinking:'Understanding…', chatNotTask:'I am here to capture tasks. Tell me what needs doing, by when and with whom.', engineLocal:'Basic parser', micDenied:'Microphone access was not allowed.',
-    draftSave:'Save', draftSaveAll:'Save all ({n})', draftDiscard:'Discard', draftSavedMsg:'Saved ✓', draftDiscardedMsg:'Discarded.', draftStale:'Replaced by a newer draft.', draftNew:'new', draftChoose:'Choose person…', draftNeedChoice:'Choose the intended person before saving.', draftPast:'Past date', draftHint:'To change anything, just type it, e.g. “make it due Sunday”.', localHint:'The basic parser cannot revise a draft by chat; save it and edit the task, or discard and rephrase.', draftFu:'Follow up with', draftWaiting:'Waiting for {w} from', draftNoDue:'No due date',
-    fbNoKey:'The AI assistant is off, so I used the basic parser. Turn it on in Settings.', fbQuota:'The free quota is used up for now, so I used the basic parser.', fbOffline:'No internet connection, so I used the basic parser.', fbBadKey:'The Gemini key is invalid, so I used the basic parser. Check Settings.', fbError:'Could not reach Gemini, so I used the basic parser.', fbParse:'Could not read Gemini’s reply, so I used the basic parser.', localNote:'Basic parser — review before saving.',
-    aiTitle:'AI assistant (Gemini)', aiOn:'On ✓', aiOff:'Off — the basic parser is used.', aiKey:'Gemini API key', aiKeyHint:'Stored on this device only, never included in backups or the save folder.', aiGetKey:'Get a free key', aiSaveKey:'Save key', aiTest:'Test connection', aiRemove:'Remove key', aiModel:'Model', aiTestOk:'Connection works ✓ ({m})', aiTestFail:'Connection failed: {e}', aiKeySaved:'Key saved.', aiKeyRemoved:'Key removed.', aiTesting:'Testing…',
-    aiPrivacy:'When you use the chat, your message text is sent to Google Gemini. Names of registered people are replaced with codes before sending; a new name is sent as written the first time only. On the free plan Google uses content to improve its products, so avoid writing confidential information.',
-    fsTitle:'Auto-save to a folder', fsUnsupported:'Your browser cannot save to a folder. Use Chrome or Edge on a computer; until then export backups manually.', fsNoneText:'Link a folder on your computer so every change is saved automatically, with a daily copy. Choose a folder inside OneDrive or Google Drive so data also reaches the cloud; a Rafeeq folder will be created inside it.', fsPick:'Choose save folder', fsChange:'Change folder', fsUnlink:'Unlink', fsConnected:'Auto-saving to folder “{n}”.', fsLast:'Last saved: {t}', fsNeedPerm:'Folder “{n}” is linked and needs permission to continue saving.', fsReconnect:'Resume saving', fsErr:'Could not save to the folder: {e}', fsSnapshots:'Daily copies', fsSnapHint:'One copy per day you work; the last 60 days are kept.', fsRestore:'Restore', fsRestoreConfirm:'Restore data from {d}? A copy of your current data will be saved in the folder first.', fsRestored:'Restored.', fsNoSnaps:'No copies yet.', fsLoadEmpty:'Saved data found in this folder ({t} tasks, {p} people). Load it?', fsNewer:'The folder data is newer than this browser’s data (saved {d}). Which one should be used?', fsUseFolder:'Folder data', fsKeepLocal:'Browser data', fsLoad:'Load', fsLinked:'Folder linked — auto-save is on.', fsUnlinked:'Unlinked.', fsChipOk:'Saved to folder', fsChipPerm:'Click to resume saving', fsChipNone:'No save folder', fsChipErr:'Save error', fsBanner:'Auto-save is paused until you confirm folder permission.', linkFolder:'Link folder', snapSafety:'Before restore',
-    days1:'1 day', days2:'2 days', daysFew:'{n} days', daysMany:'{n} days'
-  }
-};
-const STATUSES = ['not_started','in_progress','waiting','paused','done','cancelled'];
-const OPEN_STATUSES = ['not_started','in_progress','waiting','paused'];
-const PRIOS = ['high','medium','low'];
-const PRIO_RANK = {high:0, medium:1, low:2};
-const ROLES = ['exec','follow','both'];
-const WAITS = ['reply','decision','approval'];
-const METHODS = ['call','whatsapp','email','meeting','visit','other'];
-
-/* ---------- state ---------- */
-let storageOK = true;
-let db = loadDB();
-let ui = { taskFilter:{q:'', view:'active', status:'', prio:'', person:'', project:''}, winsMonth:null };
-
-function emptyDB(){ return {app:'rafeeq', version:1, tasks:[], people:[], settings:{lang:null, lastBackup:null}, monthNotes:{}}; }
-function migrate(d){
-  const base = emptyDB();
-  if (!d || typeof d !== 'object') return base;
-  d.app = 'rafeeq'; d.version = 1;
-  d.tasks = Array.isArray(d.tasks) ? d.tasks : [];
-  d.people = Array.isArray(d.people) ? d.people : [];
-  d.settings = Object.assign(base.settings, d.settings || {});
-  d.monthNotes = d.monthNotes && typeof d.monthNotes === 'object' ? d.monthNotes : {};
-  d.tasks.forEach(tk => { tk.followups = Array.isArray(tk.followups) ? tk.followups : []; tk.log = Array.isArray(tk.log) ? tk.log : []; tk.followups.forEach(f => { f.log = Array.isArray(f.log) ? f.log : []; }); });
-  return d;
-}
-function loadDB(){
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    return raw ? migrate(JSON.parse(raw)) : emptyDB();
-  } catch(e){ storageOK = false; return emptyDB(); }
-}
-function persist(){
-  try {
-    db.savedAt = nowISO();
-    localStorage.setItem(STORE_KEY, JSON.stringify(db));
-    if (typeof scheduleFolderSave === 'function') scheduleFolderSave();
-    return true;
-  } catch(e){ toast(t('saveFailed'), 'error'); return false; }
-}
-
-/* ---------- helpers ---------- */
-const lang = () => db.settings.lang || 'ar';
-function t(key, vars){
-  let s = (I18N[lang()] && I18N[lang()][key]) ?? I18N.en[key] ?? key;
-  if (vars) for (const k in vars) s = s.split('{'+k+'}').join(vars[k]);
-  return s;
-}
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
-const pad = n => String(n).padStart(2,'0');
-const toDateStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const todayStr = () => toDateStr(new Date());
-const parseDate = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
-const addDays = (s,n) => { const d = parseDate(s); d.setDate(d.getDate()+n); return toDateStr(d); };
-const diffDays = (a,b) => Math.round((parseDate(a) - parseDate(b)) / 86400000);
-const isoLocalDate = iso => toDateStr(new Date(iso));
-const nowISO = () => new Date().toISOString();
-const locale = () => lang()==='ar' ? 'ar-u-ca-gregory-nu-latn' : 'en-GB';
-function fmtDate(s, rel=true){
-  if (!s) return '';
-  if (rel){ const dd = diffDays(s, todayStr()); if (dd===0) return t('today'); if (dd===1) return t('tomorrow'); if (dd===-1) return t('yesterday'); }
-  const d = parseDate(s); const sameYear = d.getFullYear() === new Date().getFullYear();
-  return new Intl.DateTimeFormat(locale(), sameYear ? {day:'numeric', month:'short'} : {day:'numeric', month:'short', year:'numeric'}).format(d);
-}
-function fmtDateTime(iso){
-  const d = new Date(iso);
-  return fmtDate(toDateStr(d)) + ' · ' + new Intl.DateTimeFormat(locale(), {hour:'numeric', minute:'2-digit'}).format(d);
-}
-function fmtMonth(ym){ const [y,m] = ym.split('-').map(Number); return new Intl.DateTimeFormat(locale(), {month:'long', year:'numeric'}).format(new Date(y, m-1, 1)); }
-function arPlural(n, base){ if (n===0 && I18N.ar[base+'0']) return t(base+'0'); if (n===1) return t(base+'1'); if (n===2) return t(base+'2'); if (n>=3 && n<=10) return t(base+'Few',{n}); return t(base+'Many',{n}); }
-function daysText(n){ if (lang()!=='ar') return n===1 ? t('days1') : t('daysMany',{n}); if (n===1) return t('days1'); if (n===2) return t('days2'); if (n<=10) return t('daysFew',{n}); return t('daysMany',{n}); }
-const isOpen = tk => OPEN_STATUSES.includes(tk.status);
-const isLate = tk => isOpen(tk) && tk.due && tk.due < todayStr();
-const fuLate = f => f.status==='open' && f.due && f.due < todayStr();
-const personById = id => db.people.find(p => p.id === id);
-const personName = id => id ? (personById(id)?.name ?? t('deletedPerson')) : '';
-const taskById = id => db.tasks.find(x => x.id === id);
-const normName = s => s.trim().replace(/\s+/g,' ').toLowerCase();
-function getOrCreatePerson(name){
-  const n = (name||'').trim().replace(/\s+/g,' ');
-  if (!n) return null;
-  const found = db.people.find(p => normName(p.name) === normName(n));
-  if (found) return found.id;
-  const p = {id:uid(), name:n, org:'', contact:'', notes:'', createdAt:nowISO()};
-  db.people.push(p); return p.id;
-}
-function addLog(tk, kind, data={}, text=''){ tk.log.push({id:uid(), at:nowISO(), kind, data, text}); tk.updatedAt = nowISO(); }
-function logText(e){
-  const d = e.data || {};
-  switch(e.kind){
-    case 'created': return t('log_created');
-    case 'status': return t('log_status', {a:t('status_'+d.from), b:t('status_'+d.to)});
-    case 'due': return t('log_due', {d: d.to ? fmtDate(d.to,false) : t('noDue')});
-    case 'completed': return t('log_completed');
-    case 'reopened': return t('log_reopened', {d: d.prev ? fmtDate(d.prev,false) : '—'});
-    case 'fu': return t('log_fu', {p: esc(personName(d.personId)), m: t('m_'+(d.method||'other'))});
-    case 'fu_added': return t('log_fu_added', {p: esc(personName(d.personId)), w: esc(d.what||'')});
-    case 'fu_closed': return t('log_fu_closed', {p: esc(personName(d.personId))});
-    case 'archived': return t('log_archived');
-    case 'unarchived': return t('log_unarchived');
-    default: return '';
-  }
-}
-function sortTasks(list){
-  const td = todayStr();
-  return list.slice().sort((a,b) => {
-    const la = isLate(a)?0:1, lb = isLate(b)?0:1; if (la!==lb) return la-lb;
-    const da = a.due || '9999', dbb = b.due || '9999'; if (da!==dbb) return da < dbb ? -1 : 1;
-    const pa = PRIO_RANK[a.priority]??1, pb = PRIO_RANK[b.priority]??1; if (pa!==pb) return pa-pb;
-    return (a.createdAt||'') < (b.createdAt||'') ? -1 : 1;
-  });
-}
-function nextFollowup(tk){ return tk.followups.filter(f => f.status==='open').sort((a,b) => (a.due||'9999') < (b.due||'9999') ? -1 : 1)[0]; }
-
-/* ---------- icons ---------- */
-const IC = {
-  today:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
-  tasks:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>',
-  people:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.6.8 2.6 2.5 3 5.2"/></svg>',
-  wins:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>',
-  settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
-  chat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg>',
-  mic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
-  send:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg>',
-  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
-  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
-  globe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>',
-  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
-  phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5c0 8.3 6.7 15 15 15l1.5-3.5-4-2-2 2a11 11 0 0 1-5-5l2-2-2-4L4 5z"/></svg>'
-};
-
-/* ---------- shell ---------- */
-const NAV = [['today','nav_today'],['tasks','nav_tasks'],['people','nav_people'],['wins','nav_wins'],['settings','nav_settings']];
-function renderShell(route){
-  document.documentElement.lang = lang();
-  document.documentElement.dir = lang()==='ar' ? 'rtl' : 'ltr';
-  document.title = t('appName') + ' — ' + (lang()==='ar' ? 'Rafeeq' : 'رفيق');
-  const navKey = {task:'tasks', person:'people'}[route.name] || route.name;
-  const lateCount = db.tasks.filter(x => !x.archived && isLate(x)).length + db.tasks.filter(x=>!x.archived && isOpen(x)).reduce((n,x)=> n + x.followups.filter(fuLate).length, 0);
-  const links = NAV.map(([k,lbl]) => `<a href="#${k}" class="nav-link ${navKey===k?'active':''}" ${navKey===k?'aria-current="page"':''}>${IC[k]}<span>${t(lbl)}</span>${k==='today' && lateCount ? `<span class="nav-count" title="${esc(t('sec_overdue'))}">${lateCount}</span>`:''}</a>`).join('');
-  document.getElementById('sidebar').innerHTML = `
-    <div class="brand"><div class="brand-mark">${lang()==='ar'?'ر':'R'}</div><div><div class="brand-name">${t('appName')}</div><div class="brand-sub">${t('tagline')}</div></div></div>
-    <button class="btn btn-primary" data-action="chat-open" type="button" style="margin:0 4px 8px">${IC.chat}${t('chatOpen')}</button>
-    <button class="btn" data-action="new-task" type="button" style="margin:0 4px 12px">${IC.plus}${t('newTask')}</button>
-    <nav aria-label="main">${links}</nav>
-    <div class="sidebar-foot">
-      <div id="fsChip">${fsChipHtml()}</div>
-      <button class="btn btn-sm" data-action="toggle-lang" type="button">${IC.globe}${t('langSwitch')}</button>
-      <div class="small muted" style="text-align:center">${t('shortcut')}</div>
-    </div>`;
-  document.getElementById('bottomNav').innerHTML = NAV.map(([k,lbl]) => `<a href="#${k}" class="${navKey===k?'active':''}">${IC[k]}<span>${t(lbl)}</span></a>`).join('');
-  document.getElementById('mobileHead').innerHTML = `<div class="brand-mark" style="width:30px;height:30px;font-size:15px">${lang()==='ar'?'ر':'R'}</div><strong>${t('appName')}</strong><span class="spacer"></span><button class="btn btn-sm" data-action="toggle-lang" type="button">${IC.globe}${t('langSwitch')}</button>`;
-  const fab = document.getElementById('fab'); fab.innerHTML = IC.chat; fab.setAttribute('aria-label', t('chatOpen')); fab.title = t('chatOpen');
-}
-
-/* ---------- router ---------- */
-function parseRoute(){
-  const h = (location.hash || '#today').slice(1);
-  const [name, param] = h.split('/');
-  return {name: VIEWS[name] ? name : 'today', param: param ? decodeURIComponent(param) : null};
-}
-function render(keepScroll){
-  const route = parseRoute();
-  renderShell(route);
-  const main = document.getElementById('main');
-  const y = window.scrollY;
-  main.innerHTML = VIEWS[route.name](route.param);
-  if (keepScroll) window.scrollTo(0, y);
-  afterRender(route);
-}
-function afterRender(route){
-  if (route.name==='wins'){
-    const ta = document.getElementById('monthNote');
-    if (ta) ta.addEventListener('input', () => { db.monthNotes[ui.winsMonth] = ta.value; persist(); document.getElementById('printSummary').textContent = ta.value; });
-  }
-  if (route.name==='settings'){ refreshPersistStatus(); fillSnapSelect(); }
-}
-
-/* ---------- components ---------- */
-function statusPill(s){ return `<span class="pill s-${s}">${t('status_'+s)}</span>`; }
-function prioPill(p){ return p==='medium' ? '' : `<span class="pill p-${p}">${t('prioLabel',{p:t('prio_'+p)})}</span>`; }
-function duePill(tk){
-  if (!tk.due || !isOpen(tk)) return tk.due ? `<span>${t('dueOn',{d:fmtDate(tk.due)})}</span>` : '';
-  const dd = diffDays(tk.due, todayStr());
-  if (dd < 0) return `<span class="pill late">${t('overdueBy',{d:daysText(-dd)})}</span>`;
-  if (dd === 0) return `<span class="pill late" style="background:var(--warn-soft);color:var(--warn)">${t('dueToday')}</span>`;
-  return `<span>${t('dueOn',{d:fmtDate(tk.due)})}</span>`;
-}
-function waitingText(tk){
-  if (tk.status!=='waiting') return '';
-  const w = t('wait_'+(tk.waitingWhat||'reply'));
-  return tk.waitingOn ? t('waitingLine',{w, p:`<bdi>${esc(personName(tk.waitingOn))}</bdi>`}) : t('waitingLineNoP',{w});
-}
-function taskRow(tk, opts={}){
-  const done = tk.status==='done';
-  const nf = nextFollowup(tk);
-  const meta = [
-    opts.hideStatus ? '' : statusPill(tk.status),
-    prioPill(tk.priority),
-    duePill(tk),
-    tk.project ? `<span dir="auto">${esc(tk.project)}</span>` : '',
-    tk.status==='waiting' ? `<span>${waitingText(tk)}</span>` : '',
-    nf && !opts.hideFu ? `<span>${t('nextFu',{p:`<bdi>${esc(personName(nf.personId))}</bdi>`, d:fmtDate(nf.due)})}</span>` : '',
-    done && tk.completedAt ? `<span>${t('completedBox',{d:fmtDate(tk.completedAt,false)})}</span>` : '',
-    tk.archived ? `<span class="pill">${t('archived')}</span>` : ''
-  ].filter(Boolean).join('');
-  const canCheck = isOpen(tk);
-  return `<div class="row ${done||tk.status==='cancelled'?'done':''}" role="link" tabindex="0" data-href="#task/${tk.id}">
-    ${tk.status==='cancelled' ? '<span class="check" aria-hidden="true" style="cursor:default"></span>' :
-      `<button type="button" class="check ${done?'on':''}" ${canCheck?`data-action="complete" data-id="${tk.id}" title="${esc(t('completeTask'))}" aria-label="${esc(t('completeTask'))}"`:'tabindex="-1" aria-hidden="true"'}>${done?IC.check:''}</button>`}
-    <div class="row-main"><div class="row-title" dir="auto">${esc(tk.title)}</div>${meta?`<div class="row-meta">${meta}</div>`:''}</div>
-  </div>`;
-}
-function fuRow(tk, f){
-  const late = fuLate(f);
-  return `<div class="row" role="link" tabindex="0" data-href="#task/${tk.id}">
-    <span class="check" aria-hidden="true" style="cursor:default;border-style:dashed">${''}</span>
-    <div class="row-main">
-      <div class="row-title"><bdi>${esc(personName(f.personId))}</bdi> — <span dir="auto">${esc(f.what)}</span></div>
-      <div class="row-meta">${late ? `<span class="pill late">${t('overdueBy',{d:daysText(diffDays(todayStr(), f.due))})}</span>` : `<span>${fmtDate(f.due)}</span>`}<span>${t('forTask',{t:`<bdi>${esc(tk.title)}</bdi>`})}</span></div>
-    </div>
-    <div class="row-side"><button type="button" class="btn btn-sm" data-action="fu-result" data-task="${tk.id}" data-fu="${f.id}">${IC.phone}<span class="btn-txt">${t('recordResult')}</span></button></div>
-  </div>`;
-}
-function section(title, count, body, opts={}){
-  return `<section class="section"><div class="section-head"><h2>${title}</h2>${count!=null?`<span class="badge ${opts.danger?'danger':''}">${count}</span>`:''}</div>${opts.note?`<p class="section-note">${opts.note}</p>`:''}<div class="card list">${body}</div></section>`;
-}
-function emptyBlock(title, hint, btn){ return `<div class="card empty"><h3>${title}</h3><p>${hint}</p>${btn||''}</div>`; }
-function backupBanner(){
-  if (folder.state === 'needs-permission') return `<div class="banner no-print"><span>${t('fsBanner')}</span><span class="spacer"></span><button class="btn btn-sm" data-action="fs-reconnect" type="button">${t('fsReconnect')}</button></div>`;
-  if (folder.state === 'connected' || !db.tasks.length) return '';
-  const lb = db.settings.lastBackup;
-  if (lb && diffDays(todayStr(), isoLocalDate(lb)) < 7) return '';
-  const firstTask = db.tasks.reduce((m,x) => !m || x.createdAt < m ? x.createdAt : m, null);
-  if (!lb && firstTask && diffDays(todayStr(), isoLocalDate(firstTask)) < 7 && !FS_SUPPORTED) return '';
-  const msg = FS_SUPPORTED ? t('fsNoneText') : t('backupBanner');
-  return `<div class="banner no-print"><span>${msg}</span><span class="spacer"></span>${FS_SUPPORTED ? `<button class="btn btn-sm btn-primary" data-action="fs-pick" type="button">${t('linkFolder')}</button>` : ''}<button class="btn btn-sm" data-action="export" type="button">${t('backupNow')}</button></div>`;
-}
-function quickAdd(){
-  return `<form class="quick no-print" data-form="quick" autocomplete="off"><input type="text" name="title" placeholder="${esc(t('quickAddPh'))}" aria-label="${esc(t('quickAddPh'))}" dir="auto" maxlength="300"><button class="btn btn-primary" type="submit">${t('add')}</button></form>`;
-}
-
-/* ---------- views ---------- */
-const VIEWS = {
-  today(){
-    const td = todayStr();
-    const active = db.tasks.filter(x => !x.archived && isOpen(x));
-    const head = `<div class="topbar"><div><h1>${t('nav_today')}</h1><div class="sub">${new Intl.DateTimeFormat(locale(), {weekday:'long', day:'numeric', month:'long', year:'numeric'}).format(new Date())}</div></div><span class="spacer"></span><button class="btn btn-primary desk-only" data-action="new-task" type="button">${IC.plus}${t('newTask')}</button></div>`;
-    if (!db.tasks.length) return head + quickAdd() + emptyBlock(t('emptyTitle'), t('emptyHint'), `<button class="btn btn-primary" data-action="new-task" type="button">${IC.plus}${t('newTask')}</button>`);
-
-    const overdue = sortTasks(active.filter(x => x.due && x.due < td));
-    const dueToday = sortTasks(active.filter(x => x.due === td));
-    const fus = [];
-    active.forEach(tk => tk.followups.forEach(f => { if (f.status==='open' && f.due && f.due <= td) fus.push([tk,f]); }));
-    fus.sort((a,b) => a[1].due < b[1].due ? -1 : 1);
-    const waiting = sortTasks(active.filter(x => x.status==='waiting' && !(x.due && x.due <= td)));
-    const upcoming = sortTasks(active.filter(x => x.due && x.due > td && x.due <= addDays(td,7) && x.status!=='waiting'));
-    const progNoDue = sortTasks(active.filter(x => !x.due && x.status==='in_progress'));
-
-    // suggestion: actionable (not waiting/paused), ranked
-    const actionable = active.filter(x => x.status==='not_started' || x.status==='in_progress');
-    let pick = null, why = '';
-    const r1 = sortTasks(actionable.filter(x => x.due && x.due < td));
-    const r2 = sortTasks(actionable.filter(x => x.due === td));
-    const r3 = sortTasks(actionable.filter(x => x.priority==='high'));
-    const r4 = sortTasks(actionable.filter(x => x.status==='in_progress'));
-    const r5 = sortTasks(actionable);
-    if (r1[0]) { pick = r1[0]; why = t('why_overdue',{d:daysText(diffDays(td, pick.due))}); }
-    else if (r2[0]) { pick = r2[0]; why = t('why_today'); }
-    else if (r3[0]) { pick = r3[0]; why = t('why_high'); }
-    else if (r4[0]) { pick = r4[0]; why = t('why_progress'); }
-    else if (r5[0]) { pick = r5[0]; why = r5[0].due ? t('why_next') : ''; }
-
-    let html = head + `<div id="bannerSlot">${backupBanner()}</div>` + quickAdd();
-    if (pick) html += `<div class="start" role="link" tabindex="0" data-href="#task/${pick.id}"><div style="flex:1;min-width:0"><div class="start-label">${t('startWith')}</div><div class="start-title" dir="auto">${esc(pick.title)}</div>${why?`<div class="start-why">${why}</div>`:''}</div><button type="button" class="btn btn-primary" data-action="complete" data-id="${pick.id}">${IC.check}${t('complete')}</button></div>`;
-    if (overdue.length) html += section(t('sec_overdue'), overdue.length, overdue.map(x=>taskRow(x)).join(''), {danger:true});
-    if (dueToday.length) html += section(t('sec_today'), dueToday.length, dueToday.map(x=>taskRow(x)).join(''));
-    if (fus.length) html += section(t('sec_followups'), fus.length, fus.map(([tk,f])=>fuRow(tk,f)).join(''));
-    if (waiting.length) html += section(t('sec_waiting'), waiting.length, waiting.map(x=>taskRow(x,{hideStatus:true})).join(''));
-    if (upcoming.length) html += section(t('sec_upcoming'), upcoming.length, upcoming.map(x=>taskRow(x)).join(''));
-    if (progNoDue.length) html += section(t('sec_progress'), progNoDue.length, progNoDue.map(x=>taskRow(x,{hideStatus:true})).join(''));
-    if (!overdue.length && !dueToday.length && !fus.length) html += `<div class="card empty" style="padding:22px"><h3>${t('allClear')}</h3><p style="margin:0">${t('allClearHint')}</p></div>`;
-    return html;
-  },
-
-  tasks(){
-    const f = ui.taskFilter;
-    const projects = [...new Set(db.tasks.map(x => (x.project||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-    let list = db.tasks.slice();
-    if (f.view==='active') list = list.filter(x => !x.archived && isOpen(x));
-    else if (f.view==='completed') list = list.filter(x => !x.archived && (x.status==='done' || x.status==='cancelled'));
-    else if (f.view==='archived') list = list.filter(x => x.archived);
-    if (f.status) list = list.filter(x => x.status===f.status);
-    if (f.prio) list = list.filter(x => x.priority===f.prio);
-    if (f.project) list = list.filter(x => (x.project||'').trim()===f.project);
-    if (f.person) list = list.filter(x => x.waitingOn===f.person || x.followups.some(fu => fu.personId===f.person));
-    if (f.q.trim()){
-      const q = f.q.trim().toLowerCase();
-      list = list.filter(x => [x.title, x.desc, x.project, x.source, x.notes, x.result, x.links, ...x.followups.map(fu => fu.what + ' ' + personName(fu.personId)), ...x.log.map(e=>e.text)].join(' ').toLowerCase().includes(q));
-    }
-    list = f.view==='completed' ? list.sort((a,b) => (b.completedAt||b.updatedAt||'') > (a.completedAt||a.updatedAt||'') ? 1 : -1) : sortTasks(list);
-    const statusOpts = (f.view==='completed' ? ['done','cancelled'] : f.view==='active' ? OPEN_STATUSES : STATUSES);
-    const views = [['active','active'],['completed','completedF'],['archived','archivedF'],['all','allF']];
-    return `<div class="topbar"><div><h1>${t('nav_tasks')}</h1><div class="sub">${lang()==='ar' ? arPlural(list.length,'tk') : t('countTasks',{n:list.length})}</div></div><span class="spacer"></span><button class="btn btn-primary desk-only" data-action="new-task" type="button">${IC.plus}${t('newTask')}</button></div>
-      ${quickAdd()}
-      <div class="filters no-print">
-        <div class="seg" role="group">${views.map(([k,l]) => `<button type="button" class="${f.view===k?'on':''}" data-action="tf-view" data-v="${k}" aria-pressed="${f.view===k}">${t(l)}</button>`).join('')}</div>
-        <input type="search" id="taskSearch" value="${esc(f.q)}" placeholder="${esc(t('search'))}" aria-label="${esc(t('search'))}" dir="auto">
-        <select data-filter="status" aria-label="${esc(t('status'))}"><option value="">${t('allStatuses')}</option>${statusOpts.map(s=>`<option value="${s}" ${f.status===s?'selected':''}>${t('status_'+s)}</option>`).join('')}</select>
-        <select data-filter="prio" aria-label="${esc(t('priority'))}"><option value="">${t('allPrio')}</option>${PRIOS.map(p=>`<option value="${p}" ${f.prio===p?'selected':''}>${t('prio_'+p)}</option>`).join('')}</select>
-        ${db.people.length ? `<select data-filter="person" aria-label="${esc(t('person'))}"><option value="">${t('allPeople')}</option>${db.people.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${p.id}" ${f.person===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select>` : ''}
-        ${projects.length ? `<select data-filter="project" aria-label="${esc(t('project'))}"><option value="">${t('allProjects')}</option>${projects.map(p=>`<option value="${esc(p)}" ${f.project===p?'selected':''}>${esc(p)}</option>`).join('')}</select>` : ''}
-      </div>
-      ${list.length ? `<div class="card list">${list.map(x=>taskRow(x)).join('')}</div>` :
-        (db.tasks.length ? `<div class="card empty"><p style="margin:0">${t('noResults')}</p></div>` : emptyBlock(t('emptyTitle'), t('emptyHint'), `<button class="btn btn-primary" data-action="new-task" type="button">${IC.plus}${t('newTask')}</button>`))}`;
-  },
-
-  task(id){
-    const tk = taskById(id);
-    if (!tk) return `<div class="card empty"><p>${t('notFound')}</p><a class="btn" href="#tasks">${t('back')}</a></div>`;
-    const done = tk.status==='done';
-    const links = (tk.links||'').split('\n').map(s=>s.trim()).filter(Boolean);
-    const kv = [
-      [t('due'), tk.due ? fmtDate(tk.due,false) + (isLate(tk) ? ` <span class="pill late">${t('overdueBy',{d:daysText(diffDays(todayStr(), tk.due))})}</span>`:'') : t('noDue')],
-      [t('priority'), t('prio_'+tk.priority)],
-      [t('role'), t('role_'+tk.role)],
-      tk.project ? [t('project'), `<span dir="auto">${esc(tk.project)}</span>`] : null,
-      tk.source ? [t('source'), `<span dir="auto">${esc(tk.source)}</span>`] : null,
-      tk.status==='waiting' ? [t('status'), waitingText(tk)] : null,
-    ].filter(Boolean);
-    const fus = tk.followups.slice().sort((a,b) => (a.status===b.status ? ((a.due||'') < (b.due||'') ? -1 : 1) : a.status==='open' ? -1 : 1));
-    const log = tk.log.slice().reverse();
-    return `
-      <div class="topbar no-print"><a class="btn btn-ghost btn-sm flip" href="#tasks">${IC.back}${t('nav_tasks')}</a></div>
-      <div class="detail-head">
-        <h1 class="detail-title" dir="auto">${esc(tk.title)}</h1>
-        <div class="btn-group no-print">
-          ${isOpen(tk) ? `<select data-action-change="set-status" data-id="${tk.id}" aria-label="${esc(t('status'))}" style="width:auto">${OPEN_STATUSES.concat(['cancelled']).map(s=>`<option value="${s}" ${tk.status===s?'selected':''}>${t('status_'+s)}</option>`).join('')}</select>
-            <button type="button" class="btn btn-primary" data-action="complete" data-id="${tk.id}">${IC.check}${t('complete')}</button>` : `${statusPill(tk.status)} <button type="button" class="btn" data-action="reopen" data-id="${tk.id}">${t('reopen')}</button>`}
-          <button type="button" class="btn" data-action="edit-task" data-id="${tk.id}">${t('edit')}</button>
-          <button type="button" class="btn" data-action="archive" data-id="${tk.id}">${tk.archived?t('unarchive'):t('archive')}</button>
-          <button type="button" class="btn btn-danger" data-action="delete-task" data-id="${tk.id}">${t('del')}</button>
-        </div>
-      </div>
-      ${done ? `<div class="done-box"><strong>${t('completedBox',{d:fmtDate(tk.completedAt,false)})}</strong>${tk.result?`<div class="prose" dir="auto" style="margin-top:6px">${esc(tk.result)}</div>`:''}${tk.deliverable?`<div style="margin-top:6px" class="links">${linkHtml(tk.deliverable)}</div>`:''}</div>` : ''}
-      <div class="cols">
-        <div>
-          <div class="card card-pad section">
-            <div class="kv">${kv.map(([k,v])=>`<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
-            ${tk.desc ? `<div style="margin-top:16px"><div class="k small muted" style="font-weight:600">${t('desc')}</div><div class="prose" dir="auto">${esc(tk.desc)}</div></div>` : ''}
-            ${links.length ? `<div style="margin-top:16px" class="links"><div class="small muted" style="font-weight:600">${t('links')}</div>${links.map(linkHtml).join('')}</div>` : ''}
-            ${tk.notes ? `<div style="margin-top:16px" class="no-print"><div class="small muted" style="font-weight:600">${t('notes')}</div><div class="prose" dir="auto">${esc(tk.notes)}</div></div>` : ''}
-          </div>
-          <section class="section">
-            <div class="section-head"><h2>${t('followups')}</h2><span class="badge">${tk.followups.filter(f=>f.status==='open').length}</span><span style="flex:1"></span><button type="button" class="btn btn-sm no-print" data-action="add-fu" data-task="${tk.id}">${IC.plus}${t('addFollowup')}</button></div>
-            <div class="card card-pad">${fus.length ? fus.map(f => fuBlock(tk,f)).join('') : `<div class="muted small">${t('noFollowups')}</div>`}</div>
-          </section>
-        </div>
-        <section class="section">
-          <div class="section-head"><h2>${t('updates')}</h2></div>
-          <div class="card card-pad">
-            <form data-form="update" data-task="${tk.id}" class="no-print" style="margin-bottom:8px">
-              <textarea name="text" placeholder="${esc(t('updatePh'))}" aria-label="${esc(t('addUpdate'))}" dir="auto" style="min-height:64px"></textarea>
-              <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btn-sm btn-primary" type="submit">${t('addUpdate')}</button></div>
-            </form>
-            ${log.length ? `<ul class="timeline">${log.map(e => `<li><div class="when">${fmtDateTime(e.at)}</div>${e.kind==='note' ? `<div class="prose" dir="auto">${esc(e.text)}</div>` : `<div class="sys">${logText(e)}</div>${e.text?`<div class="prose" dir="auto">${esc(e.text)}</div>`:''}`}</li>`).join('')}</ul>` : `<div class="muted small">${t('noUpdates')}</div>`}
-          </div>
-        </section>
-      </div>`;
-  },
-
-  people(){
-    const td = todayStr();
-    const rows = db.people.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(p => {
-      const openF = [], waits = [];
-      let last = null;
-      db.tasks.forEach(tk => {
-        tk.followups.forEach(f => { if (f.personId===p.id){ if (f.status==='open' && isOpen(tk) && !tk.archived) openF.push(f); f.log.forEach(l => { if (!last || l.date > last) last = l.date; }); } });
-        if (tk.waitingOn===p.id && tk.status==='waiting' && !tk.archived) waits.push(tk);
-      });
-      const late = openF.filter(f => f.due && f.due < td).length;
-      return `<div class="row" role="link" tabindex="0" data-href="#person/${p.id}"><div class="row-main"><div class="row-title" dir="auto">${esc(p.name)}</div>${p.org?`<div class="row-sub" dir="auto">${esc(p.org)}</div>`:''}
-        <div class="row-meta">${openF.length?`<span class="pill ${late?'late':''}">${t('openFollowups')}: ${openF.length}</span>`:''}${waits.length?`<span class="pill s-waiting">${t('waitingTasks')}: ${waits.length}</span>`:''}<span>${last ? t('lastContact',{d:fmtDate(last)}) : t('noContact')}</span></div></div></div>`;
-    }).join('');
-    return `<div class="topbar"><div><h1>${t('people')}</h1></div><span class="spacer"></span><button class="btn" data-action="add-person" type="button">${IC.plus}${t('addPerson')}</button></div>
-      ${db.people.length ? `<div class="card list">${rows}</div>` : emptyBlock(t('emptyPeople'), t('emptyPeopleHint'), `<button class="btn" data-action="add-person" type="button">${IC.plus}${t('addPerson')}</button>`)}`;
-  },
-
-  person(id){
-    const p = personById(id);
-    if (!p) return `<div class="card empty"><p>${t('notFound')}</p><a class="btn" href="#people">${t('back')}</a></div>`;
-    const openF = [], closedEntries = [], waits = [], related = new Set();
-    db.tasks.forEach(tk => {
-      tk.followups.forEach(f => {
-        if (f.personId!==p.id) return;
-        related.add(tk.id);
-        if (f.status==='open' && isOpen(tk) && !tk.archived) openF.push([tk,f]);
-        f.log.forEach(l => closedEntries.push({tk, f, l}));
-      });
-      if (tk.waitingOn===p.id){ related.add(tk.id); if (tk.status==='waiting' && !tk.archived) waits.push(tk); }
-    });
-    openF.sort((a,b) => (a[1].due||'9999') < (b[1].due||'9999') ? -1 : 1);
-    closedEntries.sort((a,b) => (b.l.date + b.l.at) > (a.l.date + a.l.at) ? 1 : -1);
-    const relTasks = sortTasks([...related].map(taskById).filter(Boolean));
-    return `<div class="topbar no-print"><a class="btn btn-ghost btn-sm flip" href="#people">${IC.back}${t('nav_people')}</a></div>
-      <div class="detail-head"><div style="flex:1;min-width:220px"><h1 class="detail-title" dir="auto">${esc(p.name)}</h1>${p.org?`<div class="muted" dir="auto">${esc(p.org)}</div>`:''}</div>
-        <div class="btn-group"><button class="btn" data-action="edit-person" data-id="${p.id}" type="button">${t('edit')}</button><button class="btn btn-danger" data-action="delete-person" data-id="${p.id}" type="button">${t('del')}</button></div></div>
-      ${(p.contact||p.notes) ? `<div class="card card-pad section"><div class="kv">${p.contact?`<div><div class="k">${t('contact')}</div><div class="v prose" dir="auto">${esc(p.contact)}</div></div>`:''}${p.notes?`<div><div class="k">${t('personNotes')}</div><div class="v prose" dir="auto">${esc(p.notes)}</div></div>`:''}</div></div>` : ''}
-      ${openF.length ? section(t('openFollowups'), openF.length, openF.map(([tk,f])=>fuRow(tk,f)).join('')) : ''}
-      ${waits.length ? section(t('waitingTasks'), waits.length, waits.map(x=>taskRow(x,{hideStatus:true})).join('')) : ''}
-      ${closedEntries.length ? `<section class="section"><div class="section-head"><h2>${t('contactHistory')}</h2><span class="badge">${closedEntries.length}</span></div><div class="card card-pad"><ul class="timeline">${closedEntries.map(({tk,f,l}) => `<li><div class="when">${fmtDate(l.date,false)} · ${t('m_'+l.method)}</div><div dir="auto"><strong>${esc(f.what)}</strong></div>${l.text?`<div class="prose" dir="auto">${esc(l.text)}</div>`:''}<div class="small"><a href="#task/${tk.id}" dir="auto">${esc(tk.title)}</a></div></li>`).join('')}</ul></div></section>` : ''}
-      ${relTasks.length ? section(t('relatedTasks'), relTasks.length, relTasks.map(x=>taskRow(x)).join('')) : ''}`;
-  },
-
-  wins(){
-    if (!ui.winsMonth) ui.winsMonth = todayStr().slice(0,7);
-    const ym = ui.winsMonth;
-    const inMonth = d => d && d.slice(0,7) === ym;
-    const completed = db.tasks.filter(x => x.status==='done' && inMonth(x.completedAt)).sort((a,b)=> a.completedAt < b.completedAt ? -1 : 1);
-    let fuClosed = 0, contacts = 0;
-    db.tasks.forEach(tk => tk.followups.forEach(f => { if (f.status==='closed' && inMonth(f.closedOn)) fuClosed++; f.log.forEach(l => { if (inMonth(l.date)) contacts++; }); }));
-    const progress = db.tasks.filter(x => x.status!=='done' && x.status!=='cancelled').map(x => {
-      const ents = x.log.filter(e => ['note','fu','status','fu_added'].includes(e.kind) && inMonth(isoLocalDate(e.at)));
-      return ents.length ? {tk:x, n:ents.length, last:ents[ents.length-1]} : null;
-    }).filter(Boolean);
-    const blocked = db.tasks.filter(x => !x.archived && (x.status==='waiting' || x.status==='paused'));
-    const rc = {exec:0, follow:0, both:0}; completed.forEach(x => rc[x.role] = (rc[x.role]||0)+1);
-    const note = db.monthNotes[ym] || '';
-    const stat = (n,l) => `<div class="card stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
-    return `<div class="topbar no-print"><div><h1>${t('winsTitle')}</h1><div class="sub">${fmtMonth(ym)}</div></div><span class="spacer"></span>
-        <input type="month" class="no-print" data-action-change="wins-month" value="${ym}" max="${todayStr().slice(0,7)}" aria-label="${esc(t('month'))}" style="width:auto">
-        <button class="btn btn-primary no-print" data-action="print" type="button">${t('print')}</button></div>
-      <div class="print-only" style="margin-bottom:12px"><div class="small muted">${t('appName')} · ${t('generatedOn',{d:fmtDate(todayStr(),false)})}</div><h2 style="margin:4px 0">${t('reportFor',{m:fmtMonth(ym)})}</h2><div id="printSummary" class="prose" dir="auto">${esc(note)}</div></div>
-      <div class="field no-print"><label for="monthNote">${t('summary')}</label><textarea id="monthNote" dir="auto" placeholder="${esc(t('summaryPh'))}">${esc(note)}</textarea></div>
-      <div class="stats">${stat(completed.length, t('st_completed'))}${stat(progress.length, t('st_progress'))}${stat(fuClosed, t('st_fuClosed'))}${stat(contacts, t('st_contacts'))}</div>
-      <section class="section"><div class="section-head"><h2>${t('completedList')}</h2><span class="badge">${completed.length}</span></div>
-        ${completed.length ? `<p class="section-note">${t('roleSplit',{a:rc.exec,b:rc.follow,c:rc.both})}</p><div class="card list">${completed.map(x => `<div class="row" role="link" tabindex="0" data-href="#task/${x.id}"><div class="row-main"><div class="row-title" dir="auto">${esc(x.title)}</div>${x.result?`<div class="row-sub prose" dir="auto">${esc(x.result)}</div>`:''}<div class="row-meta"><span>${fmtDate(x.completedAt,false)}</span><span class="pill">${t('role_'+x.role)}</span>${x.project?`<span dir="auto">${esc(x.project)}</span>`:''}</div></div></div>`).join('')}</div>` : `<div class="card empty" style="padding:20px"><p style="margin:0">${t('noWins')}</p></div>`}
-      </section>
-      <section class="section"><div class="section-head"><h2>${t('progressList')}</h2><span class="badge">${progress.length}</span></div>
-        ${progress.length ? `<div class="card list">${progress.map(({tk,n,last}) => `<div class="row" role="link" tabindex="0" data-href="#task/${tk.id}"><div class="row-main"><div class="row-title" dir="auto">${esc(tk.title)}</div><div class="row-sub" dir="auto">${t('lastUpd',{t: last.kind==='note' ? esc(last.text) : logText(last)})}</div><div class="row-meta">${statusPill(tk.status)}<span>${lang()==='ar' ? arPlural(n,'upd') : t('updatesN',{n})}</span></div></div></div>`).join('')}</div>` : `<div class="card empty" style="padding:20px"><p style="margin:0">${t('noProgress')}</p></div>`}
-      </section>
-      ${blocked.length ? section(t('blockedNow'), blocked.length, blocked.map(x=>taskRow(x,{hideFu:true})).join(''), {note:t('blockedNote')}) : ''}`;
-  },
-
-  settings(){
-    const lb = db.settings.lastBackup;
-    const ai = aiCfg();
-    return `<div class="topbar"><h1>${t('settings')}</h1></div>
-      <div class="card card-pad section"><div class="field" style="margin:0"><label for="langSel">${t('language')}</label><select id="langSel" data-action-change="set-lang" style="max-width:260px"><option value="ar" ${lang()==='ar'?'selected':''}>العربية</option><option value="en" ${lang()==='en'?'selected':''}>English</option></select></div></div>
-      <section class="section"><div class="section-head"><h2>${t('fsTitle')}</h2></div><div class="card card-pad" id="fsBox">${fsBoxHtml()}</div></section>
-      <section class="section"><div class="section-head"><h2>${t('aiTitle')}</h2><span class="badge ${ai.key?'':'danger'}">${ai.key ? t('aiOn') : t('aiOff')}</span></div><div class="card card-pad">
-        <form data-form="ai" autocomplete="off">
-          <div class="field"><label for="aiKey">${t('aiKey')}</label>
-            <div style="display:flex;gap:8px;flex-wrap:wrap"><input type="password" id="aiKey" name="key" dir="ltr" value="${esc(ai.key)}" placeholder="AIza…" style="flex:1 1 240px;width:auto" autocomplete="off"><button class="btn btn-primary" type="submit">${t('aiSaveKey')}</button></div>
-            <span class="hint">${t('aiKeyHint')} · <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">${t('aiGetKey')} ↗</a></span></div>
-          <div class="field"><label for="aiModel">${t('aiModel')}</label><select id="aiModel" data-action-change="ai-model" style="max-width:260px" dir="ltr">${GEMINI_MODELS.map(m=>`<option value="${m}" ${ai.model===m?'selected':''}>${m}</option>`).join('')}</select></div>
-        </form>
-        <div class="btn-group" style="margin-bottom:12px"><button class="btn" type="button" data-action="ai-test" ${ai.key?'':'disabled'}>${t('aiTest')}</button>${ai.key?`<button class="btn btn-ghost" type="button" data-action="ai-remove">${t('aiRemove')}</button>`:''}<span id="aiTestOut" class="small" style="align-self:center"></span></div>
-        <p class="small muted" style="margin:0">${t('aiPrivacy')}</p>
-      </div></section>
-      <section class="section"><div class="section-head"><h2>${t('backup')}</h2></div><div class="card card-pad">
-        <p style="margin-top:0">${t('backupHint')}</p>
-        <p class="small muted">${t('dataInfo',{t:db.tasks.length, p:db.people.length})} · ${lb ? t('lastBackup',{d:fmtDateTime(lb)}) : t('neverBackup')}</p>
-        <div class="btn-group"><button class="btn" data-action="export" type="button">${t('exportBtn')}</button><button class="btn" data-action="import" type="button">${t('importBtn')}</button><input type="file" id="importFile" accept="application/json,.json" hidden></div>
-      </div></section>
-      <section class="section"><div class="section-head"><h2>${t('storageTitle')}</h2></div><div class="card card-pad"><p id="persistStatus" style="margin-top:0">…</p><button class="btn" data-action="persist" id="persistBtn" type="button">${t('persistBtn')}</button></div></section>
-      <section class="section"><div class="section-head"><h2>${t('dangerZone')}</h2></div><div class="card card-pad"><button class="btn btn-danger" data-action="clear-all" type="button">${t('clearAll')}</button></div></section>
-      <section class="section"><div class="section-head"><h2>${t('about')}</h2></div><div class="card card-pad small muted">${t('aboutText',{v:APP_VERSION})}</div></section>`;
-  }
-};
-
-function linkHtml(s){
-  const v = s.trim();
-  if (/^https?:\/\//i.test(v)) return `<a href="${esc(v)}" target="_blank" rel="noopener noreferrer" dir="ltr">${esc(v)}</a>`;
-  return `<span dir="ltr" style="display:block;overflow-wrap:anywhere">${esc(v)}</span>`;
-}
-function fuBlock(tk, f){
-  const late = fuLate(f);
-  return `<div class="fu ${f.status==='closed'?'closed':''}">
-    <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
-      <div style="flex:1;min-width:180px"><div><a href="#person/${f.personId}"><bdi>${esc(personName(f.personId))}</bdi></a> — <span dir="auto">${esc(f.what)}</span></div>
-        <div class="row-meta">${f.status==='open' ? (late ? `<span class="pill late">${t('overdueBy',{d:daysText(diffDays(todayStr(), f.due))})}</span>` : `<span>${t('followDue')}: ${fmtDate(f.due)}</span>`) : `<span class="pill s-done">${t('closedOn',{d:fmtDate(f.closedOn,false)})}</span>`}</div></div>
-      <div class="btn-group no-print">
-        ${f.status==='open' ? `<button type="button" class="btn btn-sm btn-primary" data-action="fu-result" data-task="${tk.id}" data-fu="${f.id}">${t('recordResult')}</button><button type="button" class="btn btn-sm" data-action="edit-fu" data-task="${tk.id}" data-fu="${f.id}">${t('edit')}</button>` : `<button type="button" class="btn btn-sm" data-action="reopen-fu" data-task="${tk.id}" data-fu="${f.id}">${t('reopenFu')}</button>`}
-        <button type="button" class="btn btn-sm btn-ghost" data-action="delete-fu" data-task="${tk.id}" data-fu="${f.id}" aria-label="${esc(t('del'))}">${t('del')}</button>
-      </div>
-    </div>
-    ${f.log.length ? `<div class="fu-log">${f.log.map(l => `<div><span class="muted">${fmtDate(l.date,false)} · ${t('m_'+l.method)}:</span> <span dir="auto">${esc(l.text||'—')}</span></div>`).join('')}</div>` : ''}
-  </div>`;
-}
-
-/* ---------- dialogs ---------- */
-const dlg = document.getElementById('dlg');
-let dlgState = null;
-function openDialog({title, body, submitLabel, extraButtons='', onSubmit, onOpen}){
-  dlg.innerHTML = `<form novalidate autocomplete="off"><div class="dlg-head"><h3>${title}</h3><button type="button" class="btn btn-ghost btn-sm" data-dlg="cancel" aria-label="${esc(t('close'))}">✕</button></div>
-    <div class="dlg-body">${body}</div>
-    <div class="dlg-foot"><button type="button" class="btn" data-dlg="cancel">${t('cancel')}</button>${extraButtons}<button type="submit" class="btn btn-primary" value="save">${submitLabel||t('save')}</button></div></form>`;
-  const form = dlg.querySelector('form');
-  dlgState = {dirty:false, onSubmit};
-  form.addEventListener('input', () => dlgState && (dlgState.dirty = true));
-  form.addEventListener('change', () => dlgState && (dlgState.dirty = true));
-  form.addEventListener('submit', e => {
-    e.preventDefault();
-    const fd = new FormData(form);
-    const which = e.submitter ? e.submitter.value : 'save';
-    // validation
-    let ok = true;
-    form.querySelectorAll('.err').forEach(n => n.remove());
-    form.querySelectorAll('[data-required]').forEach(inp => {
-      if (inp.closest('[hidden]')) return;
-      if (!String(inp.value).trim()){ ok = false; const er = document.createElement('div'); er.className='err'; er.textContent = t('required'); inp.after(er); }
-    });
-    if (!ok){ form.querySelector('[data-required]:not([hidden])')?.focus(); const firstErr = form.querySelector('.err'); firstErr?.previousElementSibling?.focus(); return; }
-    const res = onSubmit(fd, which, form);
-    if (res === false) return;
-    if (res === 'keep'){ dlgState.dirty = false; return; }
-    closeDialog(true);
-  });
-  form.querySelectorAll('[data-dlg=cancel]').forEach(b => b.addEventListener('click', () => tryCloseDialog()));
-  dlg.showModal();
-  onOpen && onOpen(form);
-  const first = form.querySelector('[autofocus]') || form.querySelector('input:not([type=hidden]),textarea,select');
-  first && first.focus();
-}
-function closeDialog(){ dlgState = null; dlg.close(); dlg.innerHTML=''; }
-async function tryCloseDialog(){
-  if (dlgState && dlgState.dirty){
-    const ok = await confirmBox(t('unsaved'), {ok:t('discard'), cancel:t('keepEditing'), danger:true});
-    if (!ok) return;
-  }
-  closeDialog();
-}
-dlg.addEventListener('cancel', e => { e.preventDefault(); tryCloseDialog(); });
-
-const cdlg = document.getElementById('confirm');
-function confirmBox(msg, {ok, cancel, danger}={}){
-  return new Promise(resolve => {
-    cdlg.innerHTML = `<div class="dlg-body"><p style="margin:0">${msg}</p></div><div class="dlg-foot"><button type="button" class="btn" data-c="0">${cancel||t('cancel')}</button><button type="button" class="btn ${danger?'btn-danger':'btn-primary'}" data-c="1">${ok||t('save')}</button></div>`;
-    const done = v => { cdlg.close(); cdlg.innerHTML=''; resolve(v); };
-    cdlg.querySelector('[data-c="0"]').onclick = () => done(false);
-    cdlg.querySelector('[data-c="1"]').onclick = () => done(true);
-    cdlg.oncancel = e => { e.preventDefault(); done(false); };
-    cdlg.showModal();
-    cdlg.querySelector('[data-c="1"]').focus();
-  });
-}
-
-function peopleDatalist(){ return `<datalist id="peopleList">${db.people.map(p=>`<option value="${esc(p.name)}"></option>`).join('')}</datalist>`; }
-function selectHtml(name, opts, val, labelFn){ return `<select name="${name}" id="f_${name}">${opts.map(o=>`<option value="${o}" ${o===val?'selected':''}>${labelFn(o)}</option>`).join('')}</select>`; }
-
-function taskForm(task){
-  const isNew = !task;
-  const tk = task || {status:'not_started', priority:'medium', role:'exec', title:'', desc:'', project:'', source:'', due:'', waitingOn:null, waitingWhat:'reply', links:'', notes:''};
-  const projects = [...new Set(db.tasks.map(x => (x.project||'').trim()).filter(Boolean))];
-  const statusOpts = tk.status==='done' ? null : OPEN_STATUSES.concat(isNew ? [] : ['cancelled']);
-  const body = `
-    <div class="field"><label for="f_title">${t('title')}</label><input type="text" name="title" id="f_title" value="${esc(tk.title)}" dir="auto" data-required maxlength="300" autofocus></div>
-    <div class="field"><label for="f_desc">${t('desc')}</label><textarea name="desc" id="f_desc" dir="auto">${esc(tk.desc)}</textarea></div>
-    <div class="grid3">
-      <div class="field"><label for="f_due">${t('due')}</label><input type="date" name="due" id="f_due" value="${esc(tk.due||'')}"></div>
-      <div class="field"><label for="f_priority">${t('priority')}</label>${selectHtml('priority', PRIOS, tk.priority, p=>t('prio_'+p))}</div>
-      <div class="field"><label for="f_status">${t('status')}</label>${statusOpts ? selectHtml('status', statusOpts, tk.status, s=>t('status_'+s)) : `<div>${statusPill('done')}</div>`}</div>
-    </div>
-    <div class="grid2" id="waitBox" ${tk.status==='waiting'?'':'hidden'}>
-      <div class="field"><label for="f_waitingOn">${t('waitingOn')}</label><input type="text" name="waitingOn" id="f_waitingOn" list="peopleList" value="${esc(tk.waitingOn ? personName(tk.waitingOn) : '')}" dir="auto"><span class="hint">${t('personHint')}</span></div>
-      <div class="field"><label for="f_waitingWhat">${t('waitingWhat')}</label>${selectHtml('waitingWhat', WAITS, tk.waitingWhat||'reply', w=>t('wait_'+w))}</div>
-    </div>
-    <div class="field"><span class="lbl">${t('role')}</span><div class="radio-row">${ROLES.map(r=>`<label><input type="radio" name="role" value="${r}" ${tk.role===r?'checked':''}> ${t('role_'+r)}</label>`).join('')}</div></div>
-    <div class="grid2">
-      <div class="field"><label for="f_project">${t('project')}</label><input type="text" name="project" id="f_project" list="projList" value="${esc(tk.project||'')}" dir="auto"><span class="hint">${t('projectHint')}</span><datalist id="projList">${projects.map(p=>`<option value="${esc(p)}"></option>`).join('')}</datalist></div>
-      <div class="field"><label for="f_source">${t('source')}</label><input type="text" name="source" id="f_source" value="${esc(tk.source||'')}" dir="auto" placeholder="${esc(t('sourcePh'))}"></div>
-    </div>
-    <div class="field"><label for="f_links">${t('links')}</label><textarea name="links" id="f_links" dir="ltr" style="min-height:60px">${esc(tk.links||'')}</textarea><span class="hint">${t('linksHint')}</span></div>
-    <div class="field"><label for="f_notes">${t('notes')}</label><textarea name="notes" id="f_notes" dir="auto" style="min-height:60px">${esc(tk.notes||'')}</textarea><span class="hint">${t('notesHint')}</span></div>
-    ${peopleDatalist()}`;
-  openDialog({
-    title: isNew ? t('newTask') : t('editTask'), body,
-    extraButtons: isNew ? `<button type="submit" class="btn" value="new">${t('saveAndNew')}</button>` : '',
-    onOpen(form){ const s = form.querySelector('[name=status]'); if (s) s.addEventListener('change', () => form.querySelector('#waitBox').hidden = s.value!=='waiting'); },
-    onSubmit(fd, which){
-      const target = isNew ? {id:uid(), createdAt:nowISO(), followups:[], log:[], archived:false, completedAt:null, result:'', deliverable:''} : task;
-      const prevStatus = target.status, prevDue = target.due || '';
-      target.title = fd.get('title').trim();
-      target.desc = fd.get('desc').trim();
-      target.due = fd.get('due') || '';
-      target.priority = fd.get('priority');
-      if (fd.get('status')) target.status = fd.get('status');
-      target.role = fd.get('role') || 'exec';
-      target.project = fd.get('project').trim();
-      target.source = fd.get('source').trim();
-      target.links = fd.get('links').trim();
-      target.notes = fd.get('notes').trim();
-      if (target.status==='waiting'){ target.waitingOn = getOrCreatePerson(fd.get('waitingOn')); target.waitingWhat = fd.get('waitingWhat'); }
-      else { target.waitingOn = null; }
-      if (isNew){ db.tasks.push(target); addLog(target, 'created'); }
-      else {
-        if (prevStatus !== target.status) addLog(target, 'status', {from:prevStatus, to:target.status});
-        if (prevDue !== target.due) addLog(target, 'due', {to:target.due});
-        target.updatedAt = nowISO();
-      }
-      if (!persist()) return false;
-      toast(t('saved'));
-      if (which==='new'){ closeDialog(); render(true); taskForm(); return 'keep'; }
-      if (isNew) location.hash = '#task/' + target.id; else render(true);
-    }
-  });
-}
-
-function completeDialog(tk){
-  openDialog({
-    title: t('completeTask'),
-    body: `<p class="muted" dir="auto" style="margin-top:0">${esc(tk.title)}</p>
-      <div class="field"><label for="f_cdate">${t('completedOn')}</label><input type="date" name="cdate" id="f_cdate" value="${todayStr()}" max="${todayStr()}" data-required></div>
-      <div class="field"><label for="f_result">${t('result')}</label><textarea name="result" id="f_result" dir="auto" placeholder="${esc(t('resultPh'))}" autofocus></textarea></div>
-      <div class="field"><label for="f_deliv">${t('deliverable')}</label><input type="text" name="deliverable" id="f_deliv" dir="ltr"></div>`,
-    submitLabel: t('complete'),
-    onSubmit(fd){
-      const prev = tk.status;
-      tk.status = 'done'; tk.completedAt = fd.get('cdate'); tk.result = fd.get('result').trim(); tk.deliverable = fd.get('deliverable').trim();
-      tk.waitingOn = null;
-      addLog(tk, 'completed', {from:prev, date:tk.completedAt}, tk.result);
-      if (!persist()) return false;
-      toast(t('saved')); render(true);
-    }
-  });
-}
-
-function followupDialog(tk, fu){
-  const isNew = !fu;
-  openDialog({
-    title: isNew ? t('addFollowup') : t('editFollowup'),
-    body: `<p class="muted" dir="auto" style="margin-top:0">${esc(tk.title)}</p>
-      <div class="field"><label for="f_person">${t('person')}</label><input type="text" name="person" id="f_person" list="peopleList" dir="auto" value="${esc(fu ? personName(fu.personId) : '')}" data-required autofocus><span class="hint">${t('personHint')}</span></div>
-      <div class="field"><label for="f_what">${t('what')}</label><input type="text" name="what" id="f_what" dir="auto" value="${esc(fu?.what||'')}" data-required maxlength="400"></div>
-      <div class="field"><label for="f_fdue">${t('followDue')}</label><input type="date" name="due" id="f_fdue" value="${esc(fu?.due || addDays(todayStr(),1))}" data-required></div>
-      ${peopleDatalist()}`,
-    onSubmit(fd){
-      const pid = getOrCreatePerson(fd.get('person'));
-      if (isNew){
-        const f = {id:uid(), personId:pid, what:fd.get('what').trim(), due:fd.get('due'), status:'open', createdAt:nowISO(), closedOn:null, log:[]};
-        tk.followups.push(f);
-        addLog(tk, 'fu_added', {personId:pid, what:f.what});
-      } else { fu.personId = pid; fu.what = fd.get('what').trim(); fu.due = fd.get('due'); tk.updatedAt = nowISO(); }
-      if (!persist()) return false;
-      toast(t('saved')); render(true);
-    }
-  });
-}
-
-function fuResultDialog(tk, fu){
-  openDialog({
-    title: t('recordResult'),
-    body: `<p style="margin-top:0"><bdi><strong>${esc(personName(fu.personId))}</strong></bdi> — <span dir="auto">${esc(fu.what)}</span></p>
-      <div class="grid2">
-        <div class="field"><label for="f_cd">${t('contactDate')}</label><input type="date" name="date" id="f_cd" value="${todayStr()}" max="${todayStr()}" data-required></div>
-        <div class="field"><label for="f_method">${t('method')}</label>${selectHtml('method', METHODS, 'call', m=>t('m_'+m))}</div>
-      </div>
-      <div class="field"><label for="f_rt">${t('resultText')}</label><textarea name="text" id="f_rt" dir="auto" autofocus></textarea></div>
-      <div class="field"><span class="lbl">${t('outcome')}</span><div class="radio-row">
-        <label><input type="radio" name="outcome" value="done" checked> ${t('outcome_done')}</label>
-        <label><input type="radio" name="outcome" value="again"> ${t('outcome_again')}</label></div></div>
-      <div class="field" id="nextBox" hidden><label for="f_nd">${t('nextDue')}</label><input type="date" name="next" id="f_nd" value="${addDays(todayStr(),2)}" min="${todayStr()}" data-required></div>`,
-    onOpen(form){ form.querySelectorAll('[name=outcome]').forEach(r => r.addEventListener('change', () => form.querySelector('#nextBox').hidden = form.querySelector('[name=outcome]:checked').value!=='again')); },
-    onSubmit(fd){
-      const entry = {id:uid(), at:nowISO(), date:fd.get('date'), method:fd.get('method'), text:fd.get('text').trim()};
-      fu.log.push(entry);
-      addLog(tk, 'fu', {personId:fu.personId, method:entry.method, fuId:fu.id}, entry.text);
-      if (fd.get('outcome')==='done'){ fu.status = 'closed'; fu.closedOn = entry.date; addLog(tk, 'fu_closed', {personId:fu.personId}); }
-      else { fu.due = fd.get('next'); }
-      if (!persist()) return false;
-      toast(t('saved')); render(true);
-    }
-  });
-}
-
-function personDialog(p){
-  const isNew = !p;
-  openDialog({
-    title: isNew ? t('addPerson') : t('editPerson'),
-    body: `<div class="field"><label for="f_pname">${t('name')}</label><input type="text" name="name" id="f_pname" dir="auto" value="${esc(p?.name||'')}" data-required autofocus maxlength="120"></div>
-      <div class="field"><label for="f_org">${t('org')}</label><input type="text" name="org" id="f_org" dir="auto" value="${esc(p?.org||'')}"></div>
-      <div class="field"><label for="f_contact">${t('contact')}</label><textarea name="contact" id="f_contact" dir="auto" style="min-height:56px">${esc(p?.contact||'')}</textarea></div>
-      <div class="field"><label for="f_pnotes">${t('personNotes')}</label><textarea name="notes" id="f_pnotes" dir="auto" style="min-height:56px">${esc(p?.notes||'')}</textarea></div>`,
-    onSubmit(fd, which, form){
-      const name = fd.get('name').trim().replace(/\s+/g,' ');
-      const clash = db.people.find(x => normName(x.name)===normName(name) && x !== p);
-      if (clash){ const inp = form.querySelector('[name=name]'); const er = document.createElement('div'); er.className='err'; er.textContent = t('nameExists'); inp.after(er); inp.focus(); return false; }
-      const target = p || {id:uid(), createdAt:nowISO()};
-      target.name = name; target.org = fd.get('org').trim(); target.contact = fd.get('contact').trim(); target.notes = fd.get('notes').trim();
-      if (isNew) db.people.push(target);
-      if (!persist()) return false;
-      toast(t('saved'));
-      if (isNew) location.hash = '#person/' + target.id; else render(true);
-    }
-  });
-}
-
-/* ---------- backup ---------- */
-function exportData(){
-  db.settings.lastBackup = nowISO();
-  persist();
-  const blob = new Blob([JSON.stringify(db, null, 2)], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `rafeeq-backup-${todayStr()}.json`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  toast(t('exported')); render(true);
-}
-async function importFile(file){
-  let data;
-  try { data = JSON.parse(await file.text()); } catch(e){ toast(t('importBad'),'error'); return; }
-  if (!data || data.app!=='rafeeq' || !Array.isArray(data.tasks) || !Array.isArray(data.people)){ toast(t('importBad'),'error'); return; }
-  const ok = await confirmBox(t('importConfirm',{t:data.tasks.length, p:data.people.length}), {ok:t('replace'), danger:true});
-  if (!ok) return;
-  await safetyCopy();
-  const keepLang = db.settings.lang;
-  db = migrate(data);
-  db.settings.lang = keepLang || db.settings.lang;
-  if (persist()){ toast(t('importOk')); render(); }
-}
-async function refreshPersistStatus(){
-  const el = document.getElementById('persistStatus'), btn = document.getElementById('persistBtn');
-  if (!el) return;
-  if (!navigator.storage || !navigator.storage.persisted){ el.textContent = t('persistNA'); btn.hidden = true; return; }
-  const p = await navigator.storage.persisted();
-  el.textContent = p ? t('persistOn') : t('persistOff');
-  btn.hidden = p;
-}
-
-/* ---------- small IndexedDB store (for the folder handle) ---------- */
-const idb = {
-  open(){ return new Promise((res, rej) => { const r = indexedDB.open('rafeeq-handles', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
-  async get(k){ const d = await this.open(); return new Promise((res, rej) => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
-  async set(k, v){ const d = await this.open(); return new Promise((res, rej) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); },
-  async del(k){ const d = await this.open(); return new Promise((res, rej) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
-};
-
-/* ---------- auto-save folder (File System Access API) ---------- */
-const FS_SUPPORTED = typeof window.showDirectoryPicker === 'function';
-const folder = { handle:null, state: FS_SUPPORTED ? 'none' : 'unsupported', lastSave:null, error:null, prunedDay:null };
-let fsTimer = null;
-
-async function folderInit(){
-  if (!FS_SUPPORTED) return;
-  try {
-    const h = await idb.get('dir');
-    if (!h) { folder.state = 'none'; return; }
-    folder.handle = h;
-    const p = await h.queryPermission({mode:'readwrite'});
-    if (p === 'granted') { folder.state = 'connected'; await syncOnConnect(); }
-    else folder.state = 'needs-permission';
-  } catch(e){ folder.state = 'none'; }
-  refreshFolderUI();
-}
-async function fsPick(){
-  let root;
-  try { root = await window.showDirectoryPicker({id:'rafeeq', mode:'readwrite', startIn:'documents'}); }
-  catch(e){ return; }
-  try {
-    let dir = root, hasData = false;
-    try { await root.getFileHandle('data.json'); hasData = true; } catch(_){}
-    if (!hasData && !/^(rafeeq|رفيق)$/i.test(root.name)) dir = await root.getDirectoryHandle('Rafeeq', {create:true});
-    folder.handle = dir; folder.state = 'connected'; folder.error = null;
-    await idb.set('dir', dir);
-    await syncOnConnect();
-    toast(t('fsLinked'));
-  } catch(e){ folder.error = e.message || String(e); toast(t('fsErr', {e: folder.error}), 'error'); }
-  refreshFolderUI();
-}
-async function fsReconnect(){
-  if (!folder.handle) return fsPick();
-  try {
-    const p = await folder.handle.requestPermission({mode:'readwrite'});
-    if (p === 'granted'){ folder.state = 'connected'; folder.error = null; await syncOnConnect(); }
-  } catch(e){ folder.state = 'none'; }
-  refreshFolderUI();
-}
-async function fsUnlink(){
-  try { await idb.del('dir'); } catch(_){}
-  folder.handle = null; folder.state = 'none'; folder.lastSave = null; folder.error = null;
-  toast(t('fsUnlinked')); refreshFolderUI();
-}
-async function readFolderData(){
-  try {
-    const fh = await folder.handle.getFileHandle('data.json');
-    const d = JSON.parse(await (await fh.getFile()).text());
-    return d && d.app === 'rafeeq' && Array.isArray(d.tasks) ? d : null;
-  } catch(e){ return null; }
-}
-async function syncOnConnect(){
-  const remote = await readFolderData();
-  if (remote){
-    const localEmpty = !db.tasks.length && !db.people.length;
-    const remoteHas = remote.tasks.length || remote.people.length;
-    if (localEmpty && remoteHas){
-      if (await confirmBox(t('fsLoadEmpty', {t:remote.tasks.length, p:remote.people.length}), {ok:t('fsLoad')})){ applyData(remote); return; }
-    } else if (remoteHas && (remote.savedAt || '') > (db.savedAt || '')){
-      if (await confirmBox(t('fsNewer', {d: fmtDateTime(remote.savedAt)}), {ok:t('fsUseFolder'), cancel:t('fsKeepLocal')})){ applyData(remote); return; }
-    }
-  }
-  await writeFolder();
-}
-function applyData(data){
-  const l = db.settings.lang;
-  db = migrate(JSON.parse(JSON.stringify(data)));
-  db.settings.lang = l || db.settings.lang;
-  persist(); render();
-}
-function scheduleFolderSave(){
-  if (folder.state !== 'connected') return;
-  clearTimeout(fsTimer); fsTimer = setTimeout(writeFolder, 700);
-}
-async function writeText(dir, name, text){
-  const fh = await dir.getFileHandle(name, {create:true});
-  const w = await fh.createWritable(); await w.write(text); await w.close();
-}
-async function writeFolder(){
-  if (folder.state !== 'connected' || !folder.handle) return;
-  try {
-    const json = JSON.stringify(db, null, 1);
-    await writeText(folder.handle, 'data.json', json);
-    const snaps = await folder.handle.getDirectoryHandle('snapshots', {create:true});
-    await writeText(snaps, todayStr() + '.json', json);
-    if (folder.prunedDay !== todayStr()){ folder.prunedDay = todayStr(); pruneSnapshots(snaps); }
-    folder.lastSave = nowISO(); folder.error = null;
-  } catch(e){
-    folder.error = e.message || String(e);
-    if (e.name === 'NotAllowedError' || e.name === 'SecurityError') folder.state = 'needs-permission';
-  }
-  refreshFolderUI();
-}
-async function pruneSnapshots(dir){
-  try {
-    const names = [];
-    for await (const [name, h] of dir.entries()) if (h.kind === 'file' && /^\d{4}-\d{2}-\d{2}\.json$/.test(name)) names.push(name);
-    names.sort().reverse().slice(60).forEach(n => dir.removeEntry(n).catch(() => {}));
-  } catch(_){}
-}
-async function listSnapshots(){
-  try {
-    const dir = await folder.handle.getDirectoryHandle('snapshots', {create:true});
-    const names = [];
-    for await (const [name, h] of dir.entries()) if (h.kind === 'file' && name.endsWith('.json')) names.push(name);
-    return names.sort().reverse();
-  } catch(e){ return []; }
-}
-async function safetyCopy(){
-  if (folder.state !== 'connected') return;
-  try { const dir = await folder.handle.getDirectoryHandle('snapshots', {create:true}); await writeText(dir, `before-restore-${todayStr()}-${Date.now()}.json`, JSON.stringify(db)); } catch(_){}
-}
-async function restoreSnapshot(name){
-  let data;
-  try { const dir = await folder.handle.getDirectoryHandle('snapshots'); const fh = await dir.getFileHandle(name); data = JSON.parse(await (await fh.getFile()).text()); }
-  catch(e){ toast(t('importBad'), 'error'); return; }
-  if (!data || data.app !== 'rafeeq' || !Array.isArray(data.tasks)){ toast(t('importBad'), 'error'); return; }
-  if (!await confirmBox(t('fsRestoreConfirm', {d: snapLabel(name)}), {ok:t('fsRestore'), danger:true})) return;
-  await safetyCopy();
-  applyData(data); toast(t('fsRestored'));
-}
-function snapLabel(name){
-  const m = name.match(/^(\d{4}-\d{2}-\d{2})\.json$/);
-  if (m) return fmtDate(m[1], false);
-  const s = name.match(/^before-restore-(\d{4}-\d{2}-\d{2})/);
-  return s ? `${t('snapSafety')} · ${fmtDate(s[1], false)}` : name;
-}
-function fsChipHtml(){
-  if (folder.state === 'unsupported') return '';
-  if (folder.state === 'connected' && folder.error) return `<a class="fs-chip warn" href="#settings"><span class="d"></span>${t('fsChipErr')}</a>`;
-  if (folder.state === 'connected') return `<a class="fs-chip ok" href="#settings" title="${esc(folder.lastSave ? t('fsLast',{t:fmtDateTime(folder.lastSave)}) : '')}"><span class="d"></span>${t('fsChipOk')}</a>`;
-  if (folder.state === 'needs-permission') return `<button type="button" class="fs-chip warn" data-action="fs-reconnect"><span class="d"></span>${t('fsChipPerm')}</button>`;
-  return `<a class="fs-chip none" href="#settings"><span class="d"></span>${t('fsChipNone')}</a>`;
-}
-function fsBoxHtml(){
-  const n = folder.handle ? esc(folder.handle.name) : '';
-  if (folder.state === 'unsupported') return `<p style="margin:0">${t('fsUnsupported')}</p>`;
-  if (folder.state === 'none') return `<p style="margin-top:0">${t('fsNoneText')}</p><button class="btn btn-primary" type="button" data-action="fs-pick">${t('fsPick')}</button>`;
-  if (folder.state === 'needs-permission') return `<p style="margin-top:0">${t('fsNeedPerm',{n})}</p><div class="btn-group"><button class="btn btn-primary" type="button" data-action="fs-reconnect">${t('fsReconnect')}</button><button class="btn" type="button" data-action="fs-pick">${t('fsChange')}</button></div>`;
-  return `<p style="margin-top:0">${t('fsConnected',{n})}${folder.lastSave ? `<br><span class="small muted">${t('fsLast',{t:fmtDateTime(folder.lastSave)})}</span>` : ''}</p>
-    ${folder.error ? `<p class="small" style="color:var(--danger)">${t('fsErr',{e:esc(folder.error)})}</p>` : ''}
-    <div class="btn-group" style="margin-bottom:16px"><button class="btn" type="button" data-action="fs-pick">${t('fsChange')}</button><button class="btn btn-ghost" type="button" data-action="fs-unlink">${t('fsUnlink')}</button></div>
-    <div class="field" style="margin:0"><label for="snapSel">${t('fsSnapshots')}</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><select id="snapSel" style="max-width:280px"><option>…</option></select><button class="btn" type="button" data-action="fs-restore">${t('fsRestore')}</button></div>
-      <span class="hint">${t('fsSnapHint')}</span></div>`;
-}
-async function fillSnapSelect(){
-  const sel = document.getElementById('snapSel'); if (!sel) return;
-  const names = await listSnapshots();
-  sel.innerHTML = names.length ? names.map(n => `<option value="${esc(n)}">${esc(snapLabel(n))}</option>`).join('') : `<option value="">${t('fsNoSnaps')}</option>`;
-}
-function refreshFolderUI(){
-  const chip = document.getElementById('fsChip'); if (chip) chip.innerHTML = fsChipHtml();
-  const box = document.getElementById('fsBox'); if (box){ box.innerHTML = fsBoxHtml(); fillSnapSelect(); }
-  const bn = document.getElementById('bannerSlot'); if (bn) bn.innerHTML = backupBanner();
-}
-
-/* ---------- AI (Gemini) settings: kept outside db, never exported ---------- */
-const AI_STORE = 'rafeeq.ai';
-const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
-function aiCfg(){ try { return Object.assign({key:'', model:GEMINI_MODELS[0]}, JSON.parse(localStorage.getItem(AI_STORE) || '{}')); } catch(e){ return {key:'', model:GEMINI_MODELS[0]}; } }
-function setAiCfg(c){ try { localStorage.setItem(AI_STORE, JSON.stringify(c)); return true; } catch(e){ toast(t('saveFailed'), 'error'); return false; } }
-const aiEnabled = () => !!aiCfg().key;
-
-async function callGemini(system, contents){
-  const cfg = aiCfg();
-  const models = [cfg.model, ...GEMINI_MODELS.filter(m => m !== cfg.model)];
-  let lastErr = {code:'unknown'};
-  for (const m of models){
-    const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 30000);
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
-        method:'POST', signal:ctrl.signal,
-        headers:{'Content-Type':'application/json', 'x-goog-api-key': cfg.key},
-        body: JSON.stringify({ systemInstruction:{parts:[{text:system}]}, contents, generationConfig:{responseMimeType:'application/json', temperature:0.2} })
-      });
-      clearTimeout(timer);
-      if (!res.ok){
-        const j = await res.json().catch(() => ({}));
-        const msg = j.error?.message || '';
-        if (res.status === 401 || res.status === 403 || (res.status === 400 && /api.?key/i.test(msg))) throw {code:'badkey', msg, fatal:true};
-        lastErr = {code: res.status, msg};
-        continue; // 429 quota, 404 model, 5xx → try next model
-      }
-      const j = await res.json();
-      const text = (j.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('');
-      if (!text) { lastErr = {code:'empty'}; continue; }
-      return {text, model:m};
-    } catch(e){
-      clearTimeout(timer);
-      if (e && e.fatal) throw e;
-      lastErr = e && e.name === 'AbortError' ? {code:'timeout'} : (e && e.code ? e : {code:'network'});
-      if (!navigator.onLine) break;
-    }
-  }
-  throw lastErr;
-}
-function fbReason(e){
-  const c = e && e.code;
-  if (c === 429) return 'fbQuota';
-  if (c === 'badkey') return 'fbBadKey';
-  if (c === 'parse') return 'fbParse';
-  if (!navigator.onLine) return 'fbOffline';
-  return 'fbError';
-}
-function parseJsonLoose(raw){
-  if (!raw) return null;
-  let s = String(raw).trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-  try { return JSON.parse(s); } catch(_){}
-  const a = s.indexOf('{'), b = s.lastIndexOf('}');
-  if (a >= 0 && b > a){ try { return JSON.parse(s.slice(a, b+1)); } catch(_){} }
-  return null;
-}
-
-/* ---------- names: normalization, matching, masking ---------- */
-const MARKS = /[ً-ٰٟـ]/g;
-const normAr = s => String(s || '').normalize('NFKC').replace(MARKS, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).toLowerCase();
-const NAME_TITLES = new Set(['م','د','ا','مهندس','المهندس','دكتور','الدكتور','استاذ','الاستاذ','مدام','الحاج','eng','dr','mr','mrs','ms']);
-const nameTokens = s => (normAr(s).match(/[\p{L}\p{N}]+/gu) || []).filter(x => !NAME_TITLES.has(x));
-function aliasMap(){
-  const map = new Map();
-  const add = (k, id) => { if (!map.has(k)) map.set(k, new Set()); map.get(k).add(id); };
-  db.people.forEach(p => {
-    const tk = nameTokens(p.name); if (!tk.length) return;
-    add(tk.join(' '), p.id);
-    if (tk[0].length >= 3) add(tk[0], p.id);
-    if (tk.length > 2) add(tk.slice(0,2).join(' '), p.id);
-  });
-  return map;
-}
-/* Finds known people in free text. Returns [{s,e,ids}] spans on the original string. */
-function findPeople(text){
-  const map = aliasMap(); if (!map.size) return [];
-  const toks = []; const re = /[\p{L}\p{M}\p{N}]+/gu; let m;
-  while ((m = re.exec(text))) toks.push({s:m.index, e:m.index + m[0].length, raw:m[0], n:normAr(m[0])});
-  const hits = [];
-  for (let i = 0; i < toks.length;){
-    let hit = null;
-    for (let L = 3; L >= 1 && !hit; L--){
-      if (i + L > toks.length) continue;
-      const seq = toks.slice(i, i+L).map(x => x.n);
-      const tries = [{seq, off:0}];
-      if (/^[وفبلك]/.test(seq[0]) && seq[0].length > 3){
-        let off = 1; const raw = toks[i].raw; while (off < raw.length && /[ً-ٰٟـ]/.test(raw[off])) off++;
-        tries.push({seq:[seq[0].slice(1), ...seq.slice(1)], off});
-      }
-      for (const tr of tries){ const ids = map.get(tr.seq.join(' ')); if (ids){ hit = {L, ids:[...ids], s:toks[i].s + tr.off, e:toks[i+L-1].e}; break; } }
-    }
-    if (hit){ hits.push(hit); i += hit.L; } else i++;
-  }
-  return hits;
-}
-function tokenFor(ids, surface){
-  const key = ids.slice().sort().join(',');
-  for (const k in chat.tokens) if (chat.tokens[k].slice().sort().join(',') === key) return k;
-  chat.seq++;
-  const tok = (ids.length === 1 ? 'P' : 'A') + chat.seq;
-  chat.tokens[tok] = ids; chat.surface[tok] = surface;
-  return tok;
-}
-function maskPeople(text){
-  const hits = findPeople(text); if (!hits.length) return text;
-  let out = '', last = 0;
-  hits.forEach(h => { out += text.slice(last, h.s) + '⟦' + tokenFor(h.ids, text.slice(h.s, h.e)) + '⟧'; last = h.e; });
-  return out + text.slice(last);
-}
-function unmask(s){
-  return String(s || '').replace(/⟦\s*([PA]\d+)\s*⟧/g, (all, tok) => {
-    const ids = chat.tokens[tok]; if (!ids) return all;
-    return ids.length === 1 && personById(ids[0]) ? personById(ids[0]).name : (chat.surface[tok] || all);
-  }).trim();
-}
-function refToPerson(ref){
-  const r = String(ref || '').trim(); if (!r) return null;
-  const m = r.match(/^⟦?\s*([PA]\d+)\s*⟧?$/);
-  if (m && chat.tokens[m[1]]){
-    const ids = chat.tokens[m[1]].filter(id => personById(id));
-    if (ids.length === 1) return {rid:uid(), kind:'known', id:ids[0]};
-    if (ids.length > 1) return {rid:uid(), kind:'amb', ids, name:''};
-  }
-  const clean = unmask(r).replace(/[⟦⟧]/g, '').replace(/^(مع|من|ل|لـ)\s+/, '').trim();
-  if (!clean) return null;
-  const key = nameTokens(clean).join(' ');
-  const exact = db.people.filter(p => nameTokens(p.name).join(' ') === key);
-  if (exact.length === 1) return {rid:uid(), kind:'known', id:exact[0].id};
-  const amb = aliasMap().get(key);
-  if (amb && amb.size > 1) return {rid:uid(), kind:'amb', ids:[...amb], name:clean};
-  if (amb && amb.size === 1) return {rid:uid(), kind:'known', id:[...amb][0]};
-  return {rid:uid(), kind:'new', name:clean};
-}
-
-/* ---------- dates helpers for parsing ---------- */
-const isWeekend = s => { const d = parseDate(s).getDay(); return d === 5 || d === 6; }; // Fri, Sat
-function addWorkdays(s, n){ let d = s, step = n < 0 ? -1 : 1, left = Math.abs(n); while (left > 0){ d = addDays(d, step); if (!isWeekend(d)) left--; } return d; }
-function validDate(v){ if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null; const d = parseDate(v); return isNaN(d) || toDateStr(d) !== v ? null : v; }
-function lastOfMonth(s){ const d = parseDate(s); return toDateStr(new Date(d.getFullYear(), d.getMonth()+1, 0)); }
-function nextWeekday(s, wd){ let d = addDays(s, 1); while (parseDate(d).getDay() !== wd) d = addDays(d, 1); return d; }
-const fmtDateWd = s => new Intl.DateTimeFormat(locale(), {weekday:'long', day:'numeric', month:'short'}).format(parseDate(s));
-
-/* ---------- local fallback parser (no AI) ---------- */
-const WEEKDAYS = [['الاحد','الحد','sunday'],['الاثنين','الاتنين','monday'],['الثلاثاء','التلات','الثلاث','tuesday'],['الاربعاء','الاربع','wednesday'],['الخميس','thursday'],['الجمعه','friday'],['السبت','saturday']];
-function localDue(n, td){
-  if (/(بعد\s*بكر[هةا]|بعد\s*غد|day after tomorrow)/.test(n)) return addDays(td, 2);
-  if (/(النهارده|النهارده|اليوم|today)/.test(n)) return td;
-  if (/(بكر[هةا]|غدا|tomorrow)/.test(n)) return addDays(td, 1);
-  let m = n.match(/بعد\s+(\d+)\s*(يوم|ايام)|in\s+(\d+)\s+days?/); if (m) return addDays(td, +(m[1] || m[3]));
-  if (/بعد\s+يومين/.test(n)) return addDays(td, 2);
-  if (/بعد\s+(اسبوع|اسبوعين)|in a week/.test(n)) return addDays(td, /اسبوعين/.test(n) ? 14 : 7);
-  if (/(اخر|نهايه)\s+الشهر|end of (the )?month/.test(n)) return lastOfMonth(td);
-  if (/(اخر|نهايه)\s+الاسبوع|end of (the )?week/.test(n)) return nextWeekday(td, 4);
-  if (/الاسبوع\s+(الجاي|القادم|اللي\s+جاي)|next week/.test(n)) return nextWeekday(td, 0);
-  for (let i = 0; i < WEEKDAYS.length; i++) for (const w of WEEKDAYS[i]) if (new RegExp('(^|[^\\p{L}])(يوم\\s+)?' + w + '([^\\p{L}]|$)', 'u').test(n)) return nextWeekday(td, i);
-  m = n.match(/(^|[^\d])(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?(?!\d)/);
-  if (m){ let y = m[4] ? +m[4] : +td.slice(0,4); if (y < 100) y += 2000; const v = validDate(`${y}-${pad(+m[3])}-${pad(+m[2])}`); if (v){ return (!m[4] && v < td) ? validDate(`${y+1}-${pad(+m[3])}-${pad(+m[2])}`) : v; } }
-  return null;
-}
-function localParse(text){
-  const n = ' ' + normAr(text) + ' ', td = todayStr();
-  const due = localDue(n, td);
-  const priority = /(عاجل|ضروري|مهم\s+جدا|urgent|asap)/.test(n) ? 'high' : /(مش\s+مستعجل|غير\s+مستعجل|لما\s+افضي|low priority)/.test(n) ? 'low' : 'medium';
-  const people = findPeople(text).map(h => '⟦' + tokenFor(h.ids, text.slice(h.s, h.e)) + '⟧');
-  const waiting = /(مستني|منتظر|بانتظار|waiting)/.test(n) && people.length;
-  const needFu = /(اتابع|متابعه|اكلم|اتصل|اسال|اذكر|follow\s*up|call|ask|remind)/.test(n);
-  const fuDue = due ? (diffDays(due, td) > 1 ? addWorkdays(due, -1) : due) : addWorkdays(td, 1);
-  const title = text.trim().replace(/\s+/g, ' ').slice(0, 160);
-  return {status:'ready', reply:'', tasks:[{
-    title, desc:'', due, priority,
-    status: waiting ? 'waiting' : 'not_started',
-    waitingOn: waiting ? people[0] : null,
-    waitingWhat: /(اعتماد|موافقه|approval|approve)/.test(n) ? 'approval' : /(قرار|decision)/.test(n) ? 'decision' : 'reply',
-    project:null, source:null, role:'exec',
-    followups: needFu ? people.map(p => ({person:p, what:title, due:fuDue})) : []
-  }]};
-}
-
-/* ---------- chat ---------- */
-const chat = { open:false, msgs:[], history:[], tokens:{}, surface:{}, seq:0, busy:false, refs:new Map() };
-function resetChatContext(){ chat.history = []; chat.tokens = {}; chat.surface = {}; chat.seq = 0; }
-function buildSystem(){
-  const td = todayStr();
-  const wd = new Intl.DateTimeFormat('en-US', {weekday:'long'}).format(parseDate(td));
-  const projects = [...new Set(db.tasks.map(x => (x.project || '').trim()).filter(Boolean))].slice(0, 40);
-  return `You are the task-capture assistant inside "Rafeeq", a personal work organizer. The user describes work in free text (often Egyptian or Gulf Arabic dialect, sometimes English or mixed). Turn it into structured task drafts.
-
-Today is ${td} (${wd}). Work week: Sunday–Thursday; Friday and Saturday are the weekend.
-DATES — output YYYY-MM-DD. "بكرة/بكره/غدًا/tomorrow" = tomorrow. "بعد بكرة" = day after tomorrow. A weekday name ("الخميس") = its next occurrence after today. "الأسبوع الجاي" with no day = next Sunday. "آخر الأسبوع" = the coming Thursday. "آخر الشهر" = last day of this month. Vague deadlines ("قريب", "في أقرب وقت") → due null.
-PEOPLE — tokens like ⟦P1⟧ are known people whose names are hidden for privacy; ⟦A1⟧ are ambiguous known names. Use such tokens exactly as the person value and never invent names for them. Any other person name is a new person: give the name as written, without prepositions (مع، من، لـ), keeping titles like م. or د.
-FIELDS — title: short phrase in the user's language (max ~80 chars), no dates; details go in desc. priority: "high" for عاجل/ضروري/مهم جدًا/urgent, "low" for مش مستعجل/لما أفضى, else "medium". status: "in_progress" if the user already started ("شغال فيه"/"بدأت"), "waiting" if blocked on someone ("مستني رد/اعتماد/قرار من") with waitingOn and waitingWhat ("reply"|"decision"|"approval"), else "not_started". role: "follow" if someone else executes and the user follows up ("خلي فلان يعمل"), "both" if both, else "exec". project: reuse an existing name when the user refers to it${projects.length ? ` (existing: ${projects.join(' | ')})` : ''}, else null. source: who assigned it, if said.
-FOLLOW-UPS — when the user needs something from a person (أتابع مع، أكلم، أسأل، أخلي فلان يرد/يعتمد…), add {person, what, due}. If no follow-up timing is given: 1 working day before the task due date when that is later than today, otherwise the next working day.
-ASKING — only the title is essential. Ask ONE short question only when the text is too unclear to form a task, or when the user clearly wants to follow up with someone but the timing is truly ambiguous and matters. Never ask about priority, project, role, description, or anything you can default. Never ask more than 2 questions in a row; then use defaults.
-Several tasks in one message → several items. If the user corrects a previous draft, return the full updated list of drafts. If the message is not a task (greeting/question), use status "chat" and reply briefly that you capture tasks.
-reply: one or two short sentences in the user's language and tone. When status is "ready", briefly confirm; the app shows the cards.
-
-Return ONLY this JSON:
-{"status":"ready"|"ask"|"chat","reply":string,"tasks":[{"title":string,"desc":string,"due":string|null,"priority":"high"|"medium"|"low","status":"not_started"|"in_progress"|"waiting","waitingOn":string|null,"waitingWhat":"reply"|"decision"|"approval"|null,"project":string|null,"source":string|null,"role":"exec"|"follow"|"both","followups":[{"person":string,"what":string,"due":string|null}]}]}`;
-}
-const str = v => typeof v === 'string' ? v.trim() : '';
-function normalizeDrafts(arr){
-  return (Array.isArray(arr) ? arr : []).slice(0, 10).map(x => {
-    const title = unmask(str(x.title)).slice(0, 300);
-    return {
-      title, desc: unmask(str(x.desc)), due: validDate(x.due),
-      priority: PRIOS.includes(x.priority) ? x.priority : 'medium',
-      status: ['not_started','in_progress','waiting'].includes(x.status) ? x.status : 'not_started',
-      waitingOn: x.waitingOn ? refToPerson(x.waitingOn) : null,
-      waitingWhat: WAITS.includes(x.waitingWhat) ? x.waitingWhat : 'reply',
-      project: unmask(str(x.project)), source: unmask(str(x.source)),
-      role: ROLES.includes(x.role) ? x.role : 'exec',
-      followups: (Array.isArray(x.followups) ? x.followups : []).slice(0, 10)
-        .map(f => ({person: refToPerson(f && f.person), what: unmask(str(f && f.what)) || title, due: validDate(f && f.due) || addWorkdays(todayStr(), 1)}))
-        .filter(f => f.person)
-    };
-  }).filter(x => x.title);
-}
-function openChat(prefill){
-  chat.open = true;
-  buildChatShell();
-  if (prefill) chatSend(prefill);
-  setTimeout(() => document.getElementById('chatInput')?.focus(), 30);
-}
-function closeChat(){ chat.open = false; const el = document.getElementById('chat'); el.hidden = true; el.innerHTML = ''; stopMic(); }
-function buildChatShell(){
-  const el = document.getElementById('chat');
-  if (!chat.open){ el.hidden = true; return; }
-  const ai = aiEnabled();
-  const SRok = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-  el.innerHTML = `<div class="chat-head">
-      <h3>${t('chatOpen')}</h3>
-      <a href="#settings" class="engine ${ai ? '' : 'local'}" title="${esc(t('aiTitle'))}">${ai ? 'Gemini' : t('engineLocal')}</a>
-      <span style="flex:1"></span>
-      <button type="button" class="btn btn-sm btn-ghost" data-action="chat-form">${t('chatForm')}</button>
-      <button type="button" class="btn btn-sm btn-ghost" data-action="chat-clear" title="${esc(t('chatClear'))}">${t('chatClear')}</button>
-      <button type="button" class="btn btn-sm btn-ghost" data-action="chat-close" aria-label="${esc(t('chatClose'))}">✕</button>
-    </div>
-    <div class="chat-body" id="chatBody" aria-live="polite"></div>
-    <form class="chat-foot" data-form="chat" autocomplete="off">
-      ${SRok ? `<button type="button" class="btn mic" data-action="chat-mic" id="micBtn" title="${esc(t('chatMic'))}" aria-label="${esc(t('chatMic'))}">${IC.mic}</button>` : ''}
-      <textarea id="chatInput" rows="1" dir="auto" placeholder="${esc(t('chatPh'))}" aria-label="${esc(t('chatPh'))}"></textarea>
-      <button type="submit" class="btn btn-primary" aria-label="${esc(t('chatSend'))}" title="${esc(t('chatSend'))}">${IC.send}</button>
-    </form>`;
-  el.hidden = false;
-  renderChatBody();
-  updateMicBtn();
-}
-function personSelect(ref){
-  chat.refs.set(ref.rid, ref);
-  const people = db.people.slice().sort((a,b) => a.name.localeCompare(b.name));
-  let opts = '';
-  if (ref.kind === 'amb'){
-    opts += `<option value="" selected disabled>${t('draftChoose')}</option>`;
-    ref.ids.forEach(id => { const p = personById(id); if (p) opts += `<option value="${p.id}">${esc(p.name)}</option>`; });
-    opts += '<option disabled>──────</option>';
-  }
-  if (ref.name && ref.kind !== 'amb') opts += `<option value="new" ${ref.kind === 'new' ? 'selected' : ''}>${esc(ref.name)} · ${t('draftNew')}</option>`;
-  people.forEach(p => { if (ref.kind === 'amb' && ref.ids.includes(p.id)) return; opts += `<option value="${p.id}" ${ref.kind === 'known' && ref.id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`; });
-  return `<select data-rid="${ref.rid}" class="${ref.kind === 'amb' ? 'need' : ''}" aria-label="${esc(t('person'))}">${opts}</select>`;
-}
-function draftCard(d, active){
-  const td = todayStr();
-  const dueTxt = d.due ? `${fmtDateWd(d.due)}${d.due < td ? ` <span class="pill late">${t('draftPast')}</span>` : ''}` : t('draftNoDue');
-  const lines = [];
-  lines.push(`<span>🗓 ${t('due')}: ${dueTxt}</span>`);
-  if (d.priority !== 'medium') lines.push(prioPill(d.priority));
-  if (d.status !== 'not_started') lines.push(statusPill(d.status));
-  if (d.role !== 'exec') lines.push(`<span class="pill">${t('role_'+d.role)}</span>`);
-  if (d.project) lines.push(`<span dir="auto">📁 ${esc(d.project)}</span>`);
-  if (d.source) lines.push(`<span dir="auto">${t('from',{s:esc(d.source)})}</span>`);
-  const sel = ref => active ? personSelect(ref) : `<bdi><strong>${esc(ref.kind === 'known' ? personName(ref.id) : (ref.name || '?'))}</strong></bdi>`;
-  let html = `<div class="draft-title" dir="auto">${esc(d.title)}</div>`;
-  if (d.desc) html += `<div class="draft-line" dir="auto">${esc(d.desc)}</div>`;
-  html += `<div class="draft-line">${lines.join('')}</div>`;
-  if (d.status === 'waiting' && d.waitingOn) html += `<div class="draft-line">⏳ ${t('draftWaiting',{w:t('wait_'+d.waitingWhat)})} ${sel(d.waitingOn)}</div>`;
-  d.followups.forEach(f => { html += `<div class="draft-line">↳ ${t('draftFu')} ${sel(f.person)}${f.what && f.what !== d.title ? ` <span dir="auto">— ${esc(f.what)}</span>` : ''} · ${fmtDateWd(f.due)}</div>`; });
-  return `<div class="draft-card">${html}</div>`;
-}
-function renderChatBody(){
-  const body = document.getElementById('chatBody'); if (!body) return;
-  const parts = [];
-  if (!chat.msgs.length) parts.push(`<div class="msg bot">${esc(t('chatHello'))}</div>`);
-  chat.msgs.forEach((m, i) => {
-    if (m.role === 'user') parts.push(`<div class="msg user" dir="auto">${esc(m.text)}</div>`);
-    else if (m.role === 'bot') parts.push(`<div class="msg bot" dir="auto">${esc(m.text)}</div>`);
-    else if (m.role === 'note') parts.push(`<div class="msg note">${esc(t(m.key))}</div>`);
-    else if (m.role === 'drafts'){
-      const active = m.state === 'active';
-      let h = `<div class="drafts ${m.state}">`;
-      if (m.local) h += `<div class="small muted" style="margin-bottom:6px">${t('localNote')}</div>`;
-      h += m.drafts.map(d => draftCard(d, active)).join('');
-      if (active) h += `<div class="chat-actions"><button type="button" class="btn btn-primary" data-action="draft-save" data-i="${i}">${IC.check}${m.drafts.length > 1 ? t('draftSaveAll',{n:m.drafts.length}) : t('draftSave')}</button><button type="button" class="btn" data-action="draft-discard" data-i="${i}">${t('draftDiscard')}</button></div><div class="small muted">${m.local ? t('localHint') : t('draftHint')}</div>`;
-      else if (m.state === 'saved') h += `<div class="small" style="color:var(--ok);font-weight:600">${t('draftSavedMsg')} ${(m.created || []).map(id => { const x = taskById(id); return x ? `<a href="#task/${id}" dir="auto">${esc(x.title)}</a>` : ''; }).join(' · ')}</div>`;
-      else if (m.state === 'discarded') h += `<div class="small muted">${t('draftDiscardedMsg')}</div>`;
-      else h += `<div class="small muted">${t('draftStale')}</div>`;
-      parts.push(h + '</div>');
-    }
-  });
-  if (chat.busy) parts.push(`<div class="msg bot typing">${t('chatThinking')}</div>`);
-  body.innerHTML = parts.join('');
-  body.scrollTop = body.scrollHeight;
-}
-async function chatSend(text){
-  text = (text || '').trim();
-  if (!text || chat.busy) return;
-  chat.msgs.push({role:'user', text});
-  chat.busy = true; renderChatBody();
-  let result = null, note = null;
-  const masked = maskPeople(text);
-  if (aiEnabled() && navigator.onLine){
-    chat.history.push({role:'user', parts:[{text:masked}]});
-    try {
-      const {text:raw} = await callGemini(buildSystem(), chat.history);
-      const j = parseJsonLoose(raw);
-      if (!j || typeof j !== 'object') throw {code:'parse'};
-      chat.history.push({role:'model', parts:[{text:raw}]});
-      result = j;
-    } catch(e){ chat.history.pop(); note = fbReason(e); }
-  } else note = aiEnabled() ? 'fbOffline' : 'fbNoKey';
-  if (!result){ result = localParse(text); result._local = true; }
-  chat.busy = false;
-  if (note) chat.msgs.push({role:'note', key:note});
-  handleResult(result);
-  renderChatBody();
-}
-function handleResult(j){
-  const drafts = normalizeDrafts(j.tasks);
-  const reply = unmask(str(j.reply));
-  if (j.status === 'chat' || (!drafts.length && j.status !== 'ask')){
-    chat.msgs.push({role:'bot', text: reply || t('chatNotTask')});
-    return;
-  }
-  if (reply) chat.msgs.push({role:'bot', text: reply});
-  if (j.status === 'ask') return;
-  chat.msgs.forEach(m => { if (m.role === 'drafts' && m.state === 'active') m.state = 'stale'; });
-  chat.msgs.push({role:'drafts', drafts, local: !!j._local, state:'active'});
-}
-function resolveRef(ref){
-  if (!ref) return null;
-  if (ref.kind === 'known') return personById(ref.id) ? ref.id : null;
-  if (ref.kind === 'new') return getOrCreatePerson(ref.name);
-  return null;
-}
-function saveDrafts(i){
-  const m = chat.msgs[i]; if (!m || m.state !== 'active') return;
-  const refs = m.drafts.flatMap(d => [d.status === 'waiting' ? d.waitingOn : null, ...d.followups.map(f => f.person)]).filter(Boolean);
-  if (refs.some(r => r.kind === 'amb')){
-    toast(t('draftNeedChoice'), 'error');
-    document.querySelector('#chatBody select.need')?.focus();
-    return;
-  }
-  const created = [];
-  m.drafts.forEach(d => {
-    const tk = {id:uid(), createdAt:nowISO(), title:d.title, desc:d.desc, status:d.status, priority:d.priority, role:d.role, due:d.due || '', project:d.project, source:d.source, links:'', notes:'', waitingOn:null, waitingWhat:d.waitingWhat, followups:[], log:[], archived:false, completedAt:null, result:'', deliverable:''};
-    if (d.status === 'waiting' && d.waitingOn) tk.waitingOn = resolveRef(d.waitingOn);
-    db.tasks.push(tk); addLog(tk, 'created');
-    d.followups.forEach(f => {
-      const pid = resolveRef(f.person); if (!pid) return;
-      const fu = {id:uid(), personId:pid, what:f.what, due:f.due, status:'open', createdAt:nowISO(), closedOn:null, log:[]};
-      tk.followups.push(fu); addLog(tk, 'fu_added', {personId:pid, what:fu.what});
-    });
-    created.push(tk.id);
-  });
-  if (!persist()) return;
-  m.state = 'saved'; m.created = created;
-  resetChatContext();
-  toast(t('saved')); render(true); renderChatBody();
-  document.getElementById('chatInput')?.focus();
-}
-function discardDrafts(i){
-  const m = chat.msgs[i]; if (!m) return;
-  m.state = 'discarded'; resetChatContext(); renderChatBody();
-}
-
-/* voice input */
-let rec = null;
-function toggleMic(){
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return;
-  if (rec){ rec.stop(); return; }
-  const ta = document.getElementById('chatInput'); if (!ta) return;
-  rec = new SR(); rec.lang = lang() === 'ar' ? 'ar-EG' : 'en-US'; rec.interimResults = true; rec.continuous = true;
-  const base = ta.value ? ta.value.trimEnd() + ' ' : ''; let finalText = '';
-  rec.onresult = e => { let interim = ''; for (let k = e.resultIndex; k < e.results.length; k++){ const r = e.results[k]; if (r.isFinal) finalText += r[0].transcript + ' '; else interim += r[0].transcript; } ta.value = base + finalText + interim; autoGrow(ta); };
-  rec.onerror = ev => { if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') toast(t('micDenied'), 'error'); };
-  rec.onend = () => { rec = null; updateMicBtn(); };
-  try { rec.start(); } catch(_){ rec = null; }
-  updateMicBtn();
-}
-function stopMic(){ if (rec){ try { rec.stop(); } catch(_){} } }
-function updateMicBtn(){ const b = document.getElementById('micBtn'); if (b) b.classList.toggle('on', !!rec); }
-function autoGrow(ta){ ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'; }
-
-
-/* ---------- toast ---------- */
-let toastTimer;
-function toast(msg, kind){
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.className = 'toast' + (kind ? ' '+kind : ''); el.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, kind==='error' ? 6000 : 2200);
-}
-
-/* ---------- events ---------- */
-document.addEventListener('click', async e => {
-  const a = e.target.closest('[data-action]');
-  if (a && !a.matches('select,input')){
-    const act = a.dataset.action, id = a.dataset.id;
-    const tk = id ? taskById(id) : (a.dataset.task ? taskById(a.dataset.task) : null);
-    const fu = tk && a.dataset.fu ? tk.followups.find(f => f.id===a.dataset.fu) : null;
-    e.preventDefault(); e.stopPropagation();
-    switch(act){
-      case 'new-task': taskForm(); break;
-      case 'edit-task': tk && taskForm(tk); break;
-      case 'complete': tk && isOpen(tk) && completeDialog(tk); break;
-      case 'reopen': if (tk){ const prev = tk.completedAt; tk.status='in_progress'; addLog(tk,'reopened',{prev}, tk.result ? tk.result : ''); tk.completedAt=null; tk.result=''; tk.deliverable=''; persist(); render(true); } break;
-      case 'archive': if (tk){ tk.archived = !tk.archived; addLog(tk, tk.archived?'archived':'unarchived'); persist(); toast(t('saved')); render(true); } break;
-      case 'delete-task': if (tk && await confirmBox(t('delTaskConfirm'), {ok:t('del'), danger:true})){ db.tasks = db.tasks.filter(x=>x!==tk); persist(); toast(t('deleted')); location.hash = '#tasks'; } break;
-      case 'add-fu': tk && followupDialog(tk); break;
-      case 'edit-fu': tk && fu && followupDialog(tk, fu); break;
-      case 'fu-result': tk && fu && fuResultDialog(tk, fu); break;
-      case 'reopen-fu': if (fu){ fu.status='open'; fu.closedOn=null; if (!fu.due || fu.due < todayStr()) fu.due = todayStr(); tk.updatedAt=nowISO(); persist(); render(true); } break;
-      case 'delete-fu': if (fu && await confirmBox(t('delFuConfirm'), {ok:t('del'), danger:true})){ tk.followups = tk.followups.filter(f=>f!==fu); persist(); render(true); } break;
-      case 'add-person': personDialog(); break;
-      case 'edit-person': { const p = personById(id); p && personDialog(p); break; }
-      case 'delete-person': { const p = personById(id); if (p && await confirmBox(t('delPersonConfirm'), {ok:t('del'), danger:true})){ db.people = db.people.filter(x=>x!==p); if (ui.taskFilter.person===p.id) ui.taskFilter.person=''; persist(); toast(t('deleted')); location.hash = '#people'; } break; }
-      case 'toggle-lang': setLang(lang()==='ar' ? 'en' : 'ar'); break;
-      case 'tf-view': ui.taskFilter.view = a.dataset.v; ui.taskFilter.status=''; render(); break;
-      case 'export': exportData(); break;
-      case 'import': document.getElementById('importFile').click(); break;
-      case 'persist': if (navigator.storage?.persist){ await navigator.storage.persist(); refreshPersistStatus(); } break;
-      case 'clear-all': if (await confirmBox(t('clearConfirm'), {ok:t('clearAll'), danger:true})){ const l = db.settings.lang; db = emptyDB(); db.settings.lang = l; persist(); toast(t('cleared')); location.hash = '#today'; render(); } break;
-      case 'print': window.print(); break;
-      case 'chat-open': openChat(); break;
-      case 'chat-close': closeChat(); break;
-      case 'chat-clear': chat.msgs = []; resetChatContext(); renderChatBody(); document.getElementById('chatInput')?.focus(); break;
-      case 'chat-form': taskForm(); break;
-      case 'chat-mic': toggleMic(); break;
-      case 'draft-save': saveDrafts(+a.dataset.i); break;
-      case 'draft-discard': discardDrafts(+a.dataset.i); break;
-      case 'fs-pick': await fsPick(); break;
-      case 'fs-reconnect': await fsReconnect(); break;
-      case 'fs-unlink': await fsUnlink(); break;
-      case 'fs-restore': { const v = document.getElementById('snapSel')?.value; if (v) await restoreSnapshot(v); break; }
-      case 'ai-remove': { const c = aiCfg(); c.key = ''; setAiCfg(c); toast(t('aiKeyRemoved')); render(true); if (chat.open) buildChatShell(); break; }
-      case 'ai-test': {
-        const out = document.getElementById('aiTestOut'); out.style.color = ''; out.textContent = t('aiTesting');
-        try { const r = await callGemini('Reply with this exact JSON: {"ok":true}', [{role:'user', parts:[{text:'ping'}]}]); out.style.color = 'var(--ok)'; out.textContent = t('aiTestOk', {m:r.model}); }
-        catch(err){ out.style.color = 'var(--danger)'; out.textContent = t('aiTestFail', {e: err.code === 429 ? t('fbQuota') : (err.msg || err.code || 'error')}); }
-        break;
-      }
-    }
-    return;
-  }
-  const row = e.target.closest('[data-href]');
-  if (row && !e.target.closest('a,button,input,select,textarea')) location.hash = row.dataset.href;
-});
-document.addEventListener('keydown', e => {
-  const row = e.target.closest && e.target.closest('[data-href]');
-  if (row && e.target === row && (e.key==='Enter' || e.key===' ')){ e.preventDefault(); location.hash = row.dataset.href; return; }
-  if (e.target.id==='chatInput' && e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); e.target.form.requestSubmit(); return; }
-  if (e.key==='Escape' && chat.open && !dlg.open && !cdlg.open){ e.preventDefault(); closeChat(); return; }
-  if (e.key==='/' && !dlg.open && !cdlg.open && !e.target.closest('input,textarea,select,[contenteditable]')){ e.preventDefault(); openChat(); return; }
-  if ((e.key==='n' || e.key==='N' || e.key==='ى') && !e.ctrlKey && !e.metaKey && !e.altKey && !dlg.open && !cdlg.open && !e.target.closest('input,textarea,select,[contenteditable]')){ e.preventDefault(); taskForm(); }
-});
-document.addEventListener('change', e => {
-  const el = e.target;
-  if (el.id==='importFile' && el.files[0]){ importFile(el.files[0]); el.value=''; return; }
-  if (el.dataset.filter){ ui.taskFilter[el.dataset.filter] = el.value; render(); return; }
-  if (el.dataset.rid){
-    const ref = chat.refs.get(el.dataset.rid); if (!ref) return;
-    if (el.value === 'new') ref.kind = 'new';
-    else if (el.value){ ref.kind = 'known'; ref.id = el.value; }
-    el.classList.remove('need');
-    return;
-  }
-  const act = el.dataset.actionChange;
-  if (act==='set-status'){
-    const tk = taskById(el.dataset.id); if (!tk) return;
-    const prev = tk.status; tk.status = el.value;
-    if (tk.status!=='waiting') tk.waitingOn = null;
-    addLog(tk, 'status', {from:prev, to:tk.status}); persist(); toast(t('saved')); render(true);
-    if (tk.status==='waiting') taskForm(tk);
-  } else if (act==='wins-month'){ if (el.value){ ui.winsMonth = el.value; render(); } }
-  else if (act==='set-lang'){ setLang(el.value); }
-  else if (act==='ai-model'){ const c = aiCfg(); c.model = el.value; setAiCfg(c); toast(t('saved')); }
-});
-let searchTimer;
-document.addEventListener('input', e => {
-  if (e.target.id==='chatInput'){ autoGrow(e.target); return; }
-  if (e.target.id==='taskSearch'){
-    ui.taskFilter.q = e.target.value;
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => { const pos = e.target.selectionStart; render(); const s = document.getElementById('taskSearch'); s.focus(); try{ s.setSelectionRange(pos,pos); }catch(_){} }, 180);
-  }
-});
-document.addEventListener('submit', e => {
-  const f = e.target;
-  if (f.dataset.form==='quick'){
-    e.preventDefault();
-    const title = f.elements.title.value.trim(); if (!title) return;
-    f.elements.title.value = '';
-    openChat(title);
-  } else if (f.dataset.form==='chat'){
-    e.preventDefault();
-    const ta = f.querySelector('textarea'); const v = ta.value.trim(); if (!v) return;
-    stopMic(); ta.value = ''; autoGrow(ta);
-    chatSend(v);
-  } else if (f.dataset.form==='ai'){
-    e.preventDefault();
-    const c = aiCfg(); c.key = f.elements.key.value.trim(); if (!setAiCfg(c)) return;
-    toast(c.key ? t('aiKeySaved') : t('aiKeyRemoved')); render(true); if (chat.open) buildChatShell();
-  } else if (f.dataset.form==='update'){
-    e.preventDefault();
-    const tk = taskById(f.dataset.task); const text = f.elements.text.value.trim(); if (!tk || !text) return;
-    addLog(tk, 'note', {}, text);
-    if (tk.status==='not_started'){ addLog(tk, 'status', {from:'not_started', to:'in_progress'}); tk.status='in_progress'; }
-    if (persist()){ toast(t('saved')); render(true); }
-  }
-});
-window.addEventListener('hashchange', () => { if (chat.open && matchMedia('(max-width: 720px)').matches) closeChat(); render(); window.scrollTo(0,0); document.getElementById('main').focus({preventScroll:true}); });
-window.addEventListener('storage', e => { if (e.key===STORE_KEY && !dlg.open){ db = loadDB(); render(true); } });
-
-function setLang(l){ db.settings.lang = l; persist(); render(true); if (chat.open) buildChatShell(); }
-
-/* ---------- boot ---------- */
-function showWelcome(){
-  const w = document.getElementById('welcome');
-  w.innerHTML = `<div class="card"><div class="brand-mark">ر</div><h2 style="margin:0 0 4px">رفيق · Rafeeq</h2><p class="muted" style="margin:0">اختر لغة الواجهة<br>Choose interface language</p>
-    <div class="btn-group"><button class="btn btn-primary" data-lang="ar" type="button">العربية</button><button class="btn" data-lang="en" type="button">English</button></div></div>`;
-  w.hidden = false;
-  w.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => { db.settings.lang = b.dataset.lang; persist(); w.hidden = true; render(); if (navigator.storage?.persist) navigator.storage.persist().catch(()=>{}); });
-}
-render();
-if (!db.settings.lang) showWelcome();
-if (!storageOK) setTimeout(() => toast(t('storageUnavailable'), 'error'), 300);
-folderInit();
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
-}
-</script>
+<noscript>يحتاج رفيق إلى تفعيل JavaScript.</noscript>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>
