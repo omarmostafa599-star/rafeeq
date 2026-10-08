@@ -1,5 +1,5 @@
 // رفيق — application UI (mobile-first, RTL/LTR, light by default)
-import { state, onChange, boot, enterLocal, signInGoogle, signOut, cloudReady, putTask, putPerson, putFile, newTask, newPerson, newFile, saveProfile, syncNow, uuid, nowISO, bulkReplace, localLeftovers, adoptLocalLeftovers, authError, connectDrive, unlinkDrive, refreshDriveStatus } from './data.js';
+import { state, onChange, boot, enterLocal, signInGoogle, signOut, cloudReady, putTask, putPerson, putFile, newTask, newPerson, newFile, saveProfile, syncNow, uuid, nowISO, bulkReplace, localLeftovers, adoptLocalLeftovers, authError, connectDrive, unlinkDrive, refreshDriveStatus, invokeRefine } from './data.js';
 import { uploadFile, trashFile, renameFile, fileBlob, viewUrl, previewUrl, rootFolderUrl, kindOf, extLabel, fmtSize, MAX_BYTES } from './drive.js';
 import { parseCapture, today, addDays, diffDays, pd, ds, nextWeekday, addWorkdays, isWeekend, validDate, findPeople, nameTokens, normAr } from './parse.js';
 import { DICT } from './i18n.js';
@@ -372,8 +372,8 @@ function taskOptions(sel) {
 function openFileForm(f) {
   openSheet(t('editFile'), `<form id="fForm" class="form" autocomplete="off">
       <label class="fld"><span>${t('fName')}</span><input name="name" required maxlength="300" dir="auto" value="${esc(f.name)}"></label>
-      <label class="fld"><span>${t('fTask')}</span><select name="task">${taskOptions(f.task_id)}</select></label>
-      <label class="fld"><span>${t('fPerson')}</span><select name="person"><option value="">${t('noLink')}</option>${people().map(p => `<option value="${p.id}" ${f.person_id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+      <div class="fld"><span>${t('fTask')}</span><select name="task">${taskOptions(f.task_id)}</select>${live().length ? '' : `<small class="note" style="margin:0">${t('noTasksYet')}</small>`}<button type="button" class="linkbtn start" data-act="filetask" data-fid="${f.id}">${sic('plus', 15)} ${t('newTaskFromFile')}</button></div>
+      <div class="fld"><span>${t('fPerson')}</span><select name="person"><option value="">${t('noLink')}</option>${people().map(p => `<option value="${p.id}" ${f.person_id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>${people().length ? '' : `<small class="note" style="margin:0">${t('noPeopleYet')}</small>`}</div>
       <label class="fld"><span>${t('fNote')} <em>${t('optional')}</em></span><textarea name="note" rows="2" dir="auto" placeholder="${esc(t('fNotePh'))}">${esc(f.note)}</textarea></label>
       <div class="save-row"><button class="btn primary block" type="submit">${ic.check}${t('save')}</button></div></form>`, {
     onMount: sh => sh.querySelector('#fForm').onsubmit = async e => {
@@ -493,6 +493,7 @@ const VIEWS = {
         <button type="button" data-act="theme"><span class="mi">${ic.moon}</span><span class="grow">${t('appearance')}<small>${(p.settings || {}).theme === 'dark' ? t('themeDark') : t('themeLight')}</small></span></button>
         <button type="button" data-act="ask-date"><span class="mi">${ic.cal}</span><span class="grow">${t('askDueSetting')}<small>${(p.settings || {}).askDue ? t('on') : t('off')}</small></span><span class="switch ${(p.settings || {}).askDue ? 'on' : ''}" aria-hidden="true"></span></button>
       </div>
+      ${state.mode === 'cloud' ? `<div class="menu"><button type="button" data-act="aitoggle"><span class="mi">${ic.spark}</span><span class="grow">${t('aiSetting')}<small>${UI.aiBlocked === 'missing_key' ? t('aiNotReady') : UI.aiBlocked === 'quota' ? t('aiQuota') : t('aiSettingHint')}</small></span><span class="switch ${(p.settings || {}).ai !== false ? 'on' : ''}" aria-hidden="true"></span></button></div>` : ''}
       ${state.mode === 'cloud' ? `<div class="menu">${state.drive.linked === true
         ? `<a href="${rootFolderUrl()}" target="_blank" rel="noopener"><span class="mi">${ic.folder}</span><span class="grow">Google Drive<small>${t('driveOn')}</small></span>${sic('ext', 16)}</a><button type="button" data-act="unlinkdrive"><span class="mi">${ic.link}</span><span class="grow">${t('unlinkDrive')}</span></button>`
         : `<button type="button" data-act="connectdrive"><span class="mi">${ic.folder}</span><span class="grow">${t('connectBtn')}<small>${t('driveOff')}</small></span></button>`}</div>` : ''}
@@ -586,6 +587,8 @@ function logText(e) {
     case 'steps': return t('logSteps', { a: d.done, b: d.total });
     case 'edited': return t('logEdited');
     case 'file_added': return t('logFileAdded');
+    case 'ai': return t('logAI');
+    case 'ai_undo': return t('logAIUndo');
     default: return '';
   }
 }
@@ -635,9 +638,10 @@ function openCapture(prefill = '') {
 function onCapText(v) {
   const tips = $('#capTips'); if (tips) tips.hidden = !!v.trim();
   if (!v.trim()) { D = null; $('#draftBox').innerHTML = ''; return; }
-  const keep = D ? { fuAnswered: D.fuAnswered, fuDue: D.fuAnswered ? D.fu?.due : undefined, dueTouched: D.dueTouched, due: D.dueTouched ? D.due : undefined, prioTouched: D.prioTouched, priority: D.prioTouched ? D.priority : undefined, personTouched: D.personTouched, person: D.personTouched ? D.person : undefined } : {};
+  const keep = D ? { fuAnswered: D.fuAnswered, fuDue: D.fuAnswered ? D.fu?.due : undefined, dueTouched: D.dueTouched, due: D.dueTouched ? D.due : undefined, prioTouched: D.prioTouched, priority: D.prioTouched ? D.priority : undefined, personTouched: D.personTouched, person: D.personTouched ? D.person : undefined, moreTouched: D.moreTouched, more: D.moreTouched ? D.more : undefined } : {};
   const p = parseCapture(v, people(), T());
   D = Object.assign(p, Object.fromEntries(Object.entries(keep).filter(([, x]) => x !== undefined)));
+  D.raw = v.trim();
   if (D.fu && keep.fuAnswered) D.fu.due = keep.fuDue;
   const askDue = (state.profile.settings || {}).askDue;
   D.askDue = askDue && !D.due && !D.dueTouched;
@@ -666,12 +670,13 @@ function drawDraft() {
   let personRow = '';
   if (D.person) {
     personRow = `<div class="drow">${sic(D.fu ? 'users' : D.waiting ? 'clock' : 'user', 16)}<span>${D.fu ? t('fuWith') : D.waiting ? t('waitingFor', { w: t('w_' + D.waiting.what) }) : t('related')}</span>${personSelect(D.person, 'capPerson')}${D.fu && D.fu.due ? `<span class="pill">${rel(D.fu.due)}</span>` : ''}</div>`;
+    (D.more || []).forEach((r, i) => { personRow += `<div class="drow">${sic('users', 16)}<span>${t('andWith')}</span>${personSelect(r, 'capMore' + i)}<button type="button" class="iconbtn sm" data-act="dropmore" data-i="${i}" aria-label="${esc(t('remove'))}">${sic('x', 14)}</button></div>`; });
     if (D.fu && D.fu.what) personRow += `<div class="drow sub" dir="auto">${esc(D.fu.what)}</div>`;
   }
   const needAsk = D.fu && D.ask && !D.fuAnswered && !D.fu.due;
   const askFu = needAsk ? `<div class="ask"><p>${t('askFuWhen', { p: esc(personLabel(D.person)) })}</p><div class="opts">${[[t('today'), T()], [t('tomorrow'), addDays(T(), 1)], [wd(nextWeekday(T(), 0)), nextWeekday(T(), 0)], [t('inAWeek'), addDays(T(), 7)]].map(([l, v]) => `<button type="button" class="chip" data-act="ansfu" data-v="${v}">${l}</button>`).join('')}${SR ? `<button type="button" class="chip" data-act="mic">${sic('mic', 15)}${t('answerVoice')}</button>` : ''}</div></div>` : '';
   const askDue = !needAsk && D.askDue ? `<div class="ask"><p>${t('askDue')}</p><div class="opts">${[[t('today'), T()], [t('tomorrow'), addDays(T(), 1)], [wd(nextWeekday(T(), 0)), nextWeekday(T(), 0)], [t('inAWeek'), addDays(T(), 7)]].map(([l, v]) => `<button type="button" class="chip" data-act="setdue" data-v="${v}">${l}</button>`).join('')}<button type="button" class="chip" data-act="setdue" data-v="">${t('noDue')}</button></div></div>` : '';
-  const blocked = needAsk || (D.person && D.person.kind === 'amb');
+  const blocked = needAsk || (D.person && D.person.kind === 'amb') || (D.person && (D.more || []).some(r => r.kind === 'amb'));
   box.innerHTML = `<div class="preview">
       <div class="ttl" dir="auto">${esc(D.title)}</div>
       <div class="chips">${dueChip}${prioChip}${D.person && !D.fu && !D.waiting ? `<button type="button" class="chip" data-act="makefu">${sic('users', 15)}${t('makeFu')}</button>` : ''}</div>
@@ -687,23 +692,113 @@ function drawDraft() {
     else { const nn = D.person.kind === 'new' ? D.person.name : D.person.newName; D.person = { kind: 'known', id: v, newName: nn }; }
     drawDraft();
   };
+  (D.more || []).forEach((r, i) => {
+    const ms = $('#capMore' + i); if (!ms) return;
+    ms.onchange = () => {
+      const v = ms.value; D.moreTouched = true;
+      if (v === 'none') D.more.splice(i, 1);
+      else if (v !== 'new') D.more[i] = { kind: 'known', id: v, newName: r.kind === 'new' ? r.name : r.newName };
+      drawDraft();
+    };
+  });
   const di = $('#dueIn'); if (di) di.onchange = () => { if (validDate(di.value)) { D.due = di.value; D.dueTouched = true; D.askDue = false; if (D.fu && !D.fuAnswered && !D.fu.due) { /* keep ask */ } drawDraft(); } };
 }
 function saveCapture(openAfter) {
   if (!D) return;
   const x = newTask({ title: D.title, due: D.due || null, priority: D.priority || 'mid' });
-  let pid = null;
-  if (D.person) pid = D.person.kind === 'known' ? D.person.id : D.person.kind === 'new' ? getOrCreatePerson(D.person.name) : null;
+  const resolve = ref => !ref ? null : ref.kind === 'known' ? ref.id : ref.kind === 'new' ? getOrCreatePerson(ref.name) : null;
+  const pid = resolve(D.person);
+  const extra = pid ? [...new Set((D.more || []).map(resolve).filter(id => id && id !== pid))] : [];
   addLog(x, 'created');
-  if (pid && D.waiting) { x.status = 'wait'; x.waiting_on = pid; x.waiting_what = D.waiting.what; }
+  const addFu = (personId, what, due) => { x.followups.push({ id: uuid(), person_id: personId, what: what || '', due: due || nextWorkday(), status: 'open', created_at: nowISO(), closed_on: null, log: [] }); addLog(x, 'fu_added', '', { person_id: personId }); };
+  if (pid && D.waiting) { x.status = 'wait'; x.waiting_on = pid; x.waiting_what = D.waiting.what; extra.forEach(id => addFu(id, t('w_' + D.waiting.what), nextWorkday())); }
   if (pid && D.fu) {
-    const f = { id: uuid(), person_id: pid, what: D.fu.what || '', due: D.fu.due || nextWorkday(), status: 'open', created_at: nowISO(), closed_on: null, log: [] };
-    x.followups.push(f); addLog(x, 'fu_added', '', { person_id: pid });
-    if (!x.due && /^(التواصل|متابعة|سؤال)/.test(x.title)) x.due = f.due;
+    [pid, ...extra].forEach(id => addFu(id, D.fu.what, D.fu.due));
+    if (!x.due && /^(التواصل|متابعة|سؤال)/.test(x.title)) x.due = D.fu.due || nextWorkday();
   }
-  putTask(x); closeSheet(true);
+  if (aiOn() && D.raw) x.ai = { st: 'pending', raw: D.raw.slice(0, 800), title0: x.title, dev: deviceId(), at: nowISO(), lock: { due: !!D.dueTouched, prio: !!D.prioTouched, person: !!(D.personTouched || D.moreTouched) } };
+  putTask(x); closeSheet(true); if (x.ai?.st === 'pending') scheduleAI(400);
   if (openAfter) openTask(x.id); else { if (UI.tab !== 'today' && UI.tab !== 'tasks') go('today'); }
   toast(t('savedTask'), openAfter ? null : () => { x.deleted = true; putTask(x); });
+}
+
+/* ---------- AI refine (background, never blocks capture) ---------- */
+const aiOn = () => state.mode === 'cloud' && (state.profile.settings || {}).ai !== false;
+function deviceId() { try { let d = localStorage.getItem('rafeeq2.dev'); if (!d) { d = uuid(); localStorage.setItem('rafeeq2.dev', d); } return d; } catch { return 'x'; } }
+let aiBusy = false, aiTimer = null; UI.aiBlocked = null;
+function scheduleAI(ms = 800) { clearTimeout(aiTimer); aiTimer = setTimeout(runAI, ms); }
+function matchPerson(name) {
+  const key = nameTokens(name).join(' '); if (!key) return null;
+  const ex = people().find(p => nameTokens(p.name).join(' ') === key); if (ex) return ex.id;
+  const h = findPeople(name, people());
+  return h.length === 1 && h[0].ids.length === 1 && nameTokens(name).length <= 3 ? h[0].ids[0] : null;
+}
+async function runAI() {
+  if (aiBusy || !aiOn() || !navigator.onLine || UI.aiBlocked) return;
+  const me = deviceId();
+  const pend = live().filter(x => x.ai?.st === 'pending' && x.ai.raw && (x.ai.dev === me || Date.now() - Date.parse(x.ai.at || x.created_at) > 3600000) && Date.now() - Date.parse(x.ai.at || x.created_at) < 3 * 864e5).slice(0, 5);
+  if (!pend.length) return;
+  aiBusy = true; const improved = [];
+  try {
+    for (const x0 of pend) {
+      let r;
+      try { r = await invokeRefine({ text: x0.ai.raw, today: T(), weekday: new Intl.DateTimeFormat('en', { weekday: 'long' }).format(pd(T())), lang: L(), people: people().map(p => p.name) }); }
+      catch (e) {
+        if (e?.code === 'missing_key' || e?.code === 'quota') { UI.aiBlocked = e.code; break; }
+        if (e?.code === 'offline' || e?.code === 'local') break;
+        console.warn('refine failed', e);
+        const x = taskById(x0.id); if (x?.ai?.st === 'pending') { x.ai = Object.assign({}, x.ai, { tries: (x.ai.tries || 0) + 1 }); if (x.ai.tries >= 3) x.ai.st = 'failed'; putTask(x); }
+        continue;
+      }
+      const x = taskById(x0.id); if (!x || x.deleted || x.ai?.st !== 'pending') continue;
+      if (applyRefine(x, r)) improved.push(x.id);
+    }
+  } finally { aiBusy = false; }
+  if (improved.length === 1) toast(t('aiImproved'), () => undoAI(improved[0]));
+  else if (improved.length > 1) toast(t('aiImprovedN', { n: improved.length }));
+  if (live().some(x => x.ai?.st === 'pending' && x.ai.dev === me) && !UI.aiBlocked) scheduleAI(5000);
+}
+function applyRefine(x, r) {
+  const lock = x.ai.lock || {}; const ch = [];
+  const before = { title: x.title, due: x.due, priority: x.priority, status: x.status, waiting_on: x.waiting_on, waiting_what: x.waiting_what, fuIds: (x.followups || []).map(f => f.id), created: [] };
+  const nt = String(r?.title || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  if (nt && x.title === x.ai.title0 && nt !== x.title) { x.title = nt; ch.push('title'); }
+  const due = validDate(r?.due);
+  if (!lock.due && !x.due && due && due >= T() && diffDays(due, T()) < 400) { x.due = due; ch.push('due'); }
+  if (!lock.prio && x.priority === 'mid' && r?.priority === 'hi') { x.priority = 'hi'; ch.push('prio'); }
+  if (!lock.person && Array.isArray(r?.people) && isOpen(x)) {
+    const have = new Set([x.waiting_on, ...(x.followups || []).map(f => f.person_id)].filter(Boolean));
+    for (const p of r.people.slice(0, 6)) {
+      if (!p || !p.name || !['followup', 'waiting'].includes(p.role)) continue;
+      const name = String(p.name).replace(/\s+/g, ' ').trim().slice(0, 80); if (!nameTokens(name).length) continue;
+      let id = matchPerson(name); if (!id) { id = getOrCreatePerson(name); if (id) before.created.push(id); }
+      if (!id || have.has(id)) continue; have.add(id);
+      if (p.role === 'waiting' && x.status !== 'wait' && !x.waiting_on) {
+        x.status = 'wait'; x.waiting_on = id; x.waiting_what = ['reply', 'decision', 'approval'].includes(r.waiting_what) ? r.waiting_what : 'reply'; ch.push('wait');
+      } else {
+        const fd = validDate(p.due) && p.due >= T() ? p.due : x.due && x.due > T() ? (diffDays(x.due, T()) > 1 ? addWorkdays(x.due, -1) : x.due) : nextWorkday();
+        x.followups.push({ id: uuid(), person_id: id, what: String(p.what || '').trim().slice(0, 200), due: fd, status: 'open', created_at: nowISO(), closed_on: null, log: [] });
+        addLog(x, 'fu_added', '', { person_id: id }); ch.push('fu');
+      }
+    }
+  }
+  x.ai = Object.assign({}, x.ai, { st: ch.length ? 'done' : 'same', done_at: nowISO(), before, ch });
+  if (ch.length) addLog(x, 'ai');
+  putTask(x);
+  return ch.length > 0;
+}
+function undoAI(id) {
+  const x = taskById(id); if (!x?.ai?.before || x.ai.st !== 'done') return;
+  const b = x.ai.before;
+  Object.assign(x, { title: b.title, due: b.due, priority: b.priority, status: b.status, waiting_on: b.waiting_on, waiting_what: b.waiting_what });
+  x.followups = (x.followups || []).filter(f => b.fuIds.includes(f.id) || (f.log || []).length);
+  x.ai = Object.assign({}, x.ai, { st: 'undone' });
+  addLog(x, 'ai_undo'); putTask(x);
+  (b.created || []).forEach(pid => {
+    const used = live().some(y => y.waiting_on === pid || (y.followups || []).some(f => f.person_id === pid)) || files().some(f => f.person_id === pid);
+    const p = personById(pid); if (p && !used) { p.deleted = true; putPerson(p); }
+  });
+  toast(t('aiUndone'));
 }
 
 /* ---------- voice ---------- */
@@ -798,7 +893,7 @@ function openComplete(x) {
 function openFuAdd(x, f) {
   const isNew = !f;
   openSheet(isNew ? t('addFu') : t('editFu'), `<form id="fuForm" class="form" autocomplete="off"><p class="ctx" dir="auto">${esc(x.title)}</p>
-      <label class="fld"><span>${t('person')}</span><input name="p" list="pplList2" required dir="auto" value="${esc(f ? pname(f.person_id) : '')}" placeholder="${esc(t('personPh'))}" autofocus></label>
+      <label class="fld"><span>${isNew ? t('personMulti') : t('person')}</span><input name="p" list="pplList2" required dir="auto" value="${esc(f ? pname(f.person_id) : '')}" placeholder="${esc(isNew ? t('personPhMulti') : t('personPh'))}" autofocus></label>
       <label class="fld"><span>${t('fuWhat')}</span><input name="w" dir="auto" value="${esc(f?.what || '')}" placeholder="${esc(t('fuWhatPh'))}"></label>
       <div class="fld"><span>${t('fuDue')}</span><div class="opts">${[[t('today'), T()], [t('tomorrow'), addDays(T(), 1)], [wd(nextWeekday(T(), 0)), nextWeekday(T(), 0)], [t('inAWeek'), addDays(T(), 7)]].map(([l, v]) => `<button type="button" class="chip" data-quick="${v}">${l}</button>`).join('')}</div><input type="date" name="d" value="${esc(f?.due || nextWorkday())}" required></div>
       <datalist id="pplList2">${people().map(p => `<option value="${esc(p.name)}"></option>`).join('')}</datalist>
@@ -808,9 +903,11 @@ function openFuAdd(x, f) {
       sh.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => { fm.elements.d.value = b.dataset.quick; sh.querySelectorAll('[data-quick]').forEach(y => y.classList.remove('on')); b.classList.add('on'); });
       fm.onsubmit = e => {
         e.preventDefault(); const fd = new FormData(fm);
-        const pid = getOrCreatePerson(fd.get('p')); if (!pid) return;
-        if (isNew) { const nf = { id: uuid(), person_id: pid, what: (fd.get('w') || '').trim(), due: validDate(fd.get('d')) || nextWorkday(), status: 'open', created_at: nowISO(), closed_on: null, log: [] }; x.followups.push(nf); addLog(x, 'fu_added', '', { person_id: pid }); }
-        else { f.person_id = pid; f.what = (fd.get('w') || '').trim(); f.due = validDate(fd.get('d')) || f.due; }
+        if (isNew) {
+          const ids = [...new Set(String(fd.get('p') || '').split(/[،,+؛;]/).map(n => getOrCreatePerson(n)).filter(Boolean))]; if (!ids.length) return;
+          ids.forEach(pid => { x.followups.push({ id: uuid(), person_id: pid, what: (fd.get('w') || '').trim(), due: validDate(fd.get('d')) || nextWorkday(), status: 'open', created_at: nowISO(), closed_on: null, log: [] }); addLog(x, 'fu_added', '', { person_id: pid }); });
+        }
+        else { const pid = getOrCreatePerson(fd.get('p')); if (!pid) return; f.person_id = pid; f.what = (fd.get('w') || '').trim(); f.due = validDate(fd.get('d')) || f.due; }
         putTask(x); closeSheet(true); toast(t('saved'));
       };
     }
@@ -905,7 +1002,7 @@ function openTask(id) {
     const fus = (x.followups || []).slice().sort((a, b) => a.status === b.status ? ((a.due || '') < (b.due || '') ? -1 : 1) : a.status === 'open' ? -1 : 1);
     const logs = (x.log || []).slice().reverse();
     return topBar(t('taskDetails'), `<button type="button" class="iconbtn" data-act="edittask" data-id="${x.id}" aria-label="${esc(t('edit'))}">${ic.edit}</button>`) + `<div class="layer-b">
-      <div class="chips top">${statusPill(x)}${x.priority === 'hi' ? `<span class="pill hi">${t('prioHi')}</span>` : ''}${x.project ? `<span class="pill" dir="auto">${esc(x.project)}</span>` : ''}${x.archived ? `<span class="pill">${t('archived')}</span>` : ''}</div>
+      <div class="chips top">${statusPill(x)}${x.priority === 'hi' ? `<span class="pill hi">${t('prioHi')}</span>` : ''}${x.project ? `<span class="pill" dir="auto">${esc(x.project)}</span>` : ''}${x.archived ? `<span class="pill">${t('archived')}</span>` : ''}${x.ai?.st === 'done' ? `<button type="button" class="pill ai" data-act="aiundo" data-id="${x.id}">${sic('spark', 13)}${t('aiPill')} · ${t('undo')}</button>` : x.ai?.st === 'pending' && aiOn() && !UI.aiBlocked ? `<span class="pill ai">${sic('spark', 13)}${t('aiPending')}</span>` : ''}</div>
       <h2 class="d-title" dir="auto">${esc(x.title)}</h2>
       ${x.details ? `<p class="d-text" dir="auto">${esc(x.details)}</p>` : ''}
       ${x.status === 'wait' && x.waiting_on ? `<div class="waitbox">${sic('clock', 16)}<span>${t('waitingFrom', { w: t('w_' + x.waiting_what), p: `<b dir="auto">${esc(pname(x.waiting_on))}</b>` })}</span></div>` : ''}
@@ -1040,6 +1137,15 @@ document.addEventListener('click', async e => {
       case 'editperson': { const p = personById(id); return p && openPersonForm(p); }
       case 'delperson': { const p = personById(id); return p && confirmSheet(t('delPersonQ'), t('delete'), () => { p.deleted = true; putPerson(p); popLayer(); toast(t('deleted')); }); }
       case 'mic': return toggleMic();
+      case 'dropmore': if (D && D.more) { D.more.splice(+el.dataset.i, 1); D.moreTouched = true; drawDraft(); } return;
+      case 'aiundo': return undoAI(id);
+      case 'aitoggle': { const st = Object.assign({}, state.profile.settings); st.ai = st.ai === false; saveProfile({ settings: st }); if (st.ai) { UI.aiBlocked = null; scheduleAI(500); } return renderMain(); }
+      case 'filetask': {
+        const fl = fileById(el.dataset.fid); if (!fl) return;
+        const nm = fl.name.replace(/\.[^.]{1,5}$/, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim() || fl.name;
+        const nx = newTask({ title: nm.slice(0, 300) }); addLog(nx, 'created'); addLog(nx, 'file_added', fl.name); putTask(nx);
+        fl.task_id = nx.id; putFile(fl); closeSheet(true); openTask(nx.id); toast(t('taskFromFile')); return;
+      }
       case 'upload': return pickFiles({ task: el.dataset.task || null, person: el.dataset.person || null });
       case 'connectdrive': return openConnectSheet();
       case 'connectgo': { if (!navigator.onLine) return toast(t('needOnline'), null, 'err'); const r = await connectDrive(); if (r?.error) toast(t('loginFailed'), null, 'err'); return; }
@@ -1103,7 +1209,8 @@ document.addEventListener('keydown', e => {
 
 /* ================= live updates ================= */
 onChange(why => {
-  if (why === 'auth' || why === 'profile') return renderAll();
+  if (why === 'auth') { if (state.mode === 'cloud') scheduleAI(4000); return renderAll(); }
+  if (why === 'profile') return renderAll();
   if (why === 'drive') {
     if (state.drive.justLinked) { state.drive.justLinked = false; toast(t('driveLinked')); if (state.mode) return go('library'); }
     if (state.mode) { renderMain(); UI.layers.forEach(Lr => Lr.rerender()); }
@@ -1113,6 +1220,9 @@ onChange(why => {
   if (why === 'sync') { document.querySelectorAll('.nav-foot, .hdr-side').forEach(n => n.innerHTML = syncChip()); const sc = document.querySelector('.sync-card'); if (sc && UI.tab === 'more') renderMain(); return; }
   if (why === 'data') { if ($('#onbForm')) return; renderNav(); UI.keepScroll = true; renderMain(); UI.layers.forEach(Lr => Lr.rerender()); }
 });
+
+window.addEventListener('online', () => scheduleAI(2000));
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleAI(2500); });
 
 /* ================= boot ================= */
 renderAll();

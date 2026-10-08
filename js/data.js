@@ -166,6 +166,18 @@ export async function driveToken(force = false) {
   return driveTok.token;
 }
 
+/* ---------- AI refine (Gemini, server-side) ---------- */
+/** → { result } | throws { code: 'offline' | 'missing_key' | 'quota' | 'server' } */
+export async function invokeRefine(payload) {
+  if (!sb || state.mode !== 'cloud') throw { code: 'local' };
+  if (!navigator.onLine) throw { code: 'offline' };
+  const { data, error } = await sb.functions.invoke('refine', { body: payload });
+  if (error) throw { code: 'server', detail: error.message };
+  if (data?.error) throw { code: data.error, detail: data.detail };
+  if (!data?.result) throw { code: 'server' };
+  return data.result;
+}
+
 /* ---------- profile ---------- */
 async function pullProfile() {
   if (!sb || state.mode !== 'cloud') return;
@@ -188,12 +200,12 @@ async function pushProfile() {
 
 /* ---------- mutations ---------- */
 const COLS = {
-  tasks: ['id', 'title', 'details', 'status', 'priority', 'role', 'due', 'project', 'source', 'waiting_on', 'waiting_what', 'notes', 'steps_done', 'steps_total', 'completed_on', 'result', 'archived', 'followups', 'log', 'deleted', 'client_ts', 'created_at'],
+  tasks: ['id', 'title', 'details', 'status', 'priority', 'role', 'due', 'project', 'source', 'waiting_on', 'waiting_what', 'notes', 'steps_done', 'steps_total', 'completed_on', 'result', 'archived', 'followups', 'log', 'ai', 'deleted', 'client_ts', 'created_at'],
   people: ['id', 'name', 'org', 'contact', 'notes', 'deleted', 'client_ts', 'created_at'],
   files: ['id', 'drive_id', 'name', 'mime', 'size', 'task_id', 'person_id', 'note', 'deleted', 'client_ts', 'created_at'],
 };
 export function newTask(fields = {}) {
-  return Object.assign({ id: uuid(), title: '', details: '', status: 'todo', priority: 'mid', role: 'exec', due: null, project: '', source: '', waiting_on: null, waiting_what: 'reply', notes: '', steps_done: 0, steps_total: 0, completed_on: null, result: '', archived: false, followups: [], log: [], deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields);
+  return Object.assign({ id: uuid(), title: '', details: '', status: 'todo', priority: 'mid', role: 'exec', due: null, project: '', source: '', waiting_on: null, waiting_what: 'reply', notes: '', steps_done: 0, steps_total: 0, completed_on: null, result: '', archived: false, followups: [], log: [], ai: {}, deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields);
 }
 export function newPerson(name) { return { id: uuid(), name: name.trim().replace(/\s+/g, ' '), org: '', contact: '', notes: '', deleted: false, client_ts: nowISO(), created_at: nowISO() }; }
 export function newFile(fields = {}) { return Object.assign({ id: uuid(), drive_id: '', name: '', mime: '', size: 0, task_id: null, person_id: null, note: '', deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields); }

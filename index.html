@@ -382,6 +382,9 @@ a.btn{text-decoration:none}
 .spin{display:block;width:28px;height:28px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .linkbtn.inl{padding:0;font-size:inherit;text-align:start;overflow-wrap:anywhere}
+.linkbtn.start{align-self:flex-start;display:inline-flex;align-items:center;gap:4px;padding:4px 6px;margin-inline-start:-6px}
+.pill.ai{background:var(--accent-soft);color:var(--accent-2);border:none;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+span.pill.ai{cursor:default;opacity:.85}
 
 /* toast */
 .toast{position:fixed;left:50%;transform:translate(-50%,16px);bottom:calc(96px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);border-radius:12px;padding:10px 14px;font-size:14px;z-index:70;opacity:0;transition:all .2s;display:flex;gap:14px;align-items:center;max-width:calc(100% - 32px);pointer-events:none}
@@ -424,7 +427,7 @@ a.btn{text-decoration:none}
 </style>
 <script src="config.js"></script>
 <script src="vendor/supabase.js"></script>
-<script>window.RAFEEQ_VERSION = '2.1.0';</script>
+<script>window.RAFEEQ_VERSION = '2.2.0';</script>
 </head>
 <body>
 <div class="shell" id="shell" dir="rtl">

@@ -54,6 +54,9 @@ export function findPeople(text, people) {
 
 /* ---------- vocabulary ---------- */
 const STOP = new Set(['عشان', 'علشان', 'بخصوص', 'عن', 'على', 'في', 'من', 'مع', 'الى', 'الي', 'قبل', 'بعد', 'بكره', 'بكرا', 'غدا', 'اليوم', 'النهارده', 'الاحد', 'الاثنين', 'الاتنين', 'الثلاثاء', 'التلات', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'و', 'لما', 'يرد', 'يبعت', 'يعتمد', 'يرسل', 'يوافق', 'ضروري', 'عاجل', 'الاسبوع', 'الجاي', 'القادم', 'اخر', 'الشهر', 'رد', 'اعتماد', 'موافقه', 'قرار', 'حول', 'لأجل', 'لاجل', 'about', 'regarding', 'to', 'for', 'tomorrow', 'today']);
+// normalized stop-words (built once); «على» the preposition is checked on the raw word because it normalizes to the name «علي»
+const STOPN = new Set([...STOP, 'بعدين', 'بعدها', 'كمان', 'برضه', 'برضو', 'ثم', 'اني', 'ان', 'انه', 'لو', 'اذا', 'يعني', 'خلال', 'حتى', 'لحد', 'and', 'then'].map(x => normAr(x)).filter(x => x !== 'علي'));
+const isStop = w => STOPN.has(normAr(w)) || /^(على|عل[ىي]ه|عليها)$/.test(w);
 const WEEKDAYS = [['الاحد', 'الحد', 'sunday'], ['الاثنين', 'الاتنين', 'monday'], ['الثلاثاء', 'التلات', 'الثلاث', 'tuesday'], ['الاربعاء', 'الاربع', 'wednesday'], ['الخميس', 'thursday'], ['الجمعه', 'friday'], ['السبت', 'saturday']];
 const FU_VERB = /(^|\s)(و?اتابع|متابعه|و?اكلم|و?اتصل|و?اسال|و?اذكر|و?اراسل|و?ابلغ|و?ارجع ل|follow\s*up|call|ask|remind|ping)(\s|$)/;
 const WAIT_VERB = /(مستني|منتظر|بانتظار|في انتظار|waiting)/;
@@ -101,11 +104,27 @@ function newNameCandidate(text, knownSpans) {
     if (knownSpans.some(h => start < h.e && start + m[1].length > h.s)) continue;
     const words = m[1].split(/\s+/);
     const keep = [];
-    for (const w of words) { if (STOP.has(normAr(w)) || /^ال/.test(normAr(w)) && keep.length === 0 && !/^(?:م|د|أ|ا)\./.test(w)) break; keep.push(w); if (!/^(?:م|د|أ|ا)\.$/.test(w) && keep.length >= 2) break; }
+    for (const w of words) { if (isStop(w) || /^ال/.test(normAr(w)) && keep.length === 0 && !/^(?:م|د|أ|ا)\./.test(w) || (keep.length && /^و[\p{L}]{3,}/u.test(w))) break; keep.push(w); if (!/^(?:م|د|أ|ا)\.$/.test(w) && keep.length >= 2) break; }
     const name = clean(keep.join(' '));
-    if (name && !STOP.has(normAr(name)) && normAr(name).length >= 2) return name;
+    if (name && !isStop(name) && normAr(name).length >= 2) return name;
   }
   return null;
+}
+
+/** Extra people joined with «و» right after a span: "مع خالد وسارة وم. فهد" → ['سارة', 'م. فهد'] (new names only). */
+function andNames(text, from, knownSpans) {
+  const out = []; let rest = text.slice(from);
+  const re = /^\s*(?:،|,)?\s*و\s*((?:(?:م|د|أ|ا)\.\s*)?[\p{L}]{2,}(?:\s+[\p{L}]{2,})?)/u;
+  for (let guard = 0; guard < 6; guard++) {
+    const m = rest.match(re); if (!m) break;
+    const words = m[1].split(/\s+/); const keep = [];
+    for (const w of words) { if (isStop(w) || (keep.length && /^و[\p{L}]{3,}/u.test(w))) break; keep.push(w); if (!/^(?:م|د|أ|ا)\.$/.test(w) && keep.length >= 2) break; }
+    const name = clean(keep.join(' '));
+    const at = text.length - rest.length + m[0].indexOf(m[1]);
+    if (!name || isStop(name) || /^(?:أ|ا)[\p{L}]+(?:ه|ها|هم)$/u.test(name) || knownSpans.some(h => at < h.e && at + name.length > h.s)) break;
+    out.push(name); rest = rest.slice(m[0].indexOf(m[1]) + name.length);
+  }
+  return out;
 }
 
 /**
@@ -120,13 +139,15 @@ export function parseCapture(text, people, td = today()) {
   const priority = /(عاجل|ضروري|مهم\s+جدا|urgent|asap)/.test(n) ? 'hi' : /(مش\s+مستعجل|غير\s+مستعجل|لما\s+افضي|مش\s+ضروري|low priority)/.test(n) ? 'lo' : 'mid';
 
   const hits = findPeople(raw, people);
-  let person = null;
+  const refOf = h => h.ids.length === 1 ? { kind: 'known', id: h.ids[0] } : { kind: 'amb', ids: h.ids, label: raw.slice(h.s, h.e) };
+  let person = null; const more = [];
   if (hits.length) {
-    const h = hits[0];
-    person = h.ids.length === 1 ? { kind: 'known', id: h.ids[0] } : { kind: 'amb', ids: h.ids, label: raw.slice(h.s, h.e) };
+    person = refOf(hits[0]);
+    hits.slice(1).forEach(h => { const r = refOf(h); if (!(r.kind === 'known' && person.kind === 'known' && r.id === person.id) && !more.some(x => x.kind === 'known' && r.kind === 'known' && x.id === r.id)) more.push(r); });
+    andNames(raw, hits[hits.length - 1].e, hits).forEach(n => more.push({ kind: 'new', name: n }));
   } else {
     const nm = newNameCandidate(raw, hits);
-    if (nm) person = { kind: 'new', name: nm };
+    if (nm) { person = { kind: 'new', name: nm }; const at = raw.indexOf(nm); if (at >= 0) andNames(raw, at + nm.length, hits).forEach(n => more.push({ kind: 'new', name: n })); }
   }
 
   const fuVerb = FU_VERB.test(n);
@@ -164,6 +185,6 @@ export function parseCapture(text, people, td = today()) {
     fu = { what: what || (primaryFu ? '' : s), due: fdue };
     ask = !fdue;
   }
-  return { title: s.slice(0, 300), due, priority, person, fu, waiting, ask };
+  return { title: s.slice(0, 300), due, priority, person, more: person ? more.slice(0, 5) : [], fu, waiting, ask };
 }
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
