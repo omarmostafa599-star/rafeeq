@@ -1,9 +1,5 @@
 // رفيق — إعدادات الربط بالخادم.
-// انسخ القيمتين من: Supabase → Project Settings → API
-//   Project URL        → supabaseUrl
-//   anon public key    → supabaseAnonKey   (مفتاح عام آمن للنشر؛ الحماية عبر سياسات قاعدة البيانات)
-// اتركهما فارغتين لاستخدام التطبيق على الجهاز فقط.
 window.RAFEEQ_CONFIG = {
-  supabaseUrl: '',
-  supabaseAnonKey: ''
+  supabaseUrl: 'https://khuccltwwinaobkcukyn.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtodWNjbHR3d2luYW9ia2N1a3luIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0NDExNjMsImV4cCI6MjEwNzAxNzE2M30.pkXhAJwn2s_JyAyWZjmGGRTrK344mX2KxIAvuB2FH-0'
 };
