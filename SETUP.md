@@ -123,3 +123,20 @@
 ## عند وصول تحديث جديد
 
 ارفع الملفات الجديدة فوق القديمة كما في الخطوة 1، **ما عدا `config.js`** حتى لا تُمسح مفاتيحك. ثم أغلق التطبيق وافتحه مرتين.
+
+---
+
+## الإصدار 2.1 — مكتبة الملفات (Google Drive)
+
+تُنفَّذ مرة واحدة:
+
+1. **قاعدة البيانات:** Supabase ← SQL Editor ← New query ← الصق محتوى `supabase/002_files_drive.sql` ← Run.
+2. **Google Cloud:** فعّل **Google Drive API** للمشروع (APIs & Services ← Library ← Google Drive API ← Enable).
+3. **دالة الخادم:** Supabase ← Edge Functions ← Deploy a new function ← Via Editor:
+   - الاسم: `google-token`
+   - الكود: محتوى `supabase/functions/google-token/index.ts` ← Deploy.
+4. **السر:** Supabase ← Edge Functions ← Secrets ← Add new secret:
+   - الاسم `GOOGLE_CLIENT_SECRET`، والقيمة: Client secret من Google Cloud (يبدأ بـ `GOCSPX-`).
+5. ارفع ملفات التطبيق الجديدة إلى GitHub (ما عدا `config.js`).
+
+**علامة النجاح:** المكتبة ← ربط Google Drive ← توافق مرة واحدة ← ترفع ملفًا فيظهر في Drive داخل مجلد «رفيق».

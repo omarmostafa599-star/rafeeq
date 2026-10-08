@@ -1,6 +1,19 @@
 // رفيق — data layer: local cache + outbox, synced to Supabase when signed in.
 // Every change is applied locally first (works offline), queued, then pushed.
 
+/* An OAuth error comes back in the URL (query or hash). Capture it before anything else reads the URL. */
+export const authError = (() => {
+  try {
+    const src = new URLSearchParams(location.search);
+    const h = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const err = src.get('error') || h.get('error');
+    if (!err) return null;
+    const desc = src.get('error_description') || h.get('error_description') || '';
+    history.replaceState(null, '', location.pathname);
+    return { code: err, detail: decodeURIComponent(desc.replace(/\+/g, ' ')) };
+  } catch { return null; }
+})();
+
 const CFG = window.RAFEEQ_CONFIG || {};
 export const cloudReady = !!(CFG.supabaseUrl && CFG.supabaseAnonKey && window.supabase);
 export const sb = cloudReady
@@ -14,8 +27,9 @@ export const state = {
   mode: null,            // 'cloud' | 'local' | null (signed out)
   user: null,            // { id, email, name }
   profile: { display_name: '', job_title: '', lang: 'ar', settings: {} },
-  tasks: [], people: [],
+  tasks: [], people: [], files: [],
   sync: { status: 'idle', pending: 0, last: null, error: null },
+  drive: { linked: null, justLinked: false },   // null = unknown yet
 };
 
 const listeners = new Set();
@@ -29,9 +43,12 @@ const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v ? JS
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 const lsDel = k => { try { localStorage.removeItem(k); } catch { } };
 
+const TABLES = ['people', 'tasks', 'files'];
+const listOf = tbl => tbl === 'tasks' ? state.tasks : tbl === 'people' ? state.people : state.files;
+
 let outbox = new Set();
 function saveLocal() {
-  const ok = lsSet(K.cache(), { tasks: state.tasks, people: state.people, profile: state.profile });
+  const ok = lsSet(K.cache(), { tasks: state.tasks, people: state.people, files: state.files, profile: state.profile });
   lsSet(K.outbox(), [...outbox]);
   state.sync.pending = outbox.size;
   if (!ok) { state.sync.error = 'storage'; emit('sync'); }
@@ -39,7 +56,7 @@ function saveLocal() {
 }
 function loadLocal() {
   const c = lsGet(K.cache(), null);
-  state.tasks = c?.tasks || []; state.people = c?.people || [];
+  state.tasks = c?.tasks || []; state.people = c?.people || []; state.files = c?.files || [];
   if (c?.profile) state.profile = Object.assign({ display_name: '', job_title: '', lang: 'ar', settings: {} }, c.profile);
   outbox = new Set(lsGet(K.outbox(), []));
   state.sync.pending = outbox.size;
@@ -49,10 +66,10 @@ function loadLocal() {
 export async function boot() {
   if (sb) {
     const { data } = await sb.auth.getSession();
-    if (/[?&](code|error)=/.test(location.search)) history.replaceState(null, '', location.pathname + location.hash);
-    if (data?.session) { await enterCloud(data.session.user); return; }
+    if (/[?&](code|error)=/.test(location.search)) history.replaceState(null, '', location.pathname);
+    if (data?.session) { await enterCloud(data.session); return; }
     sb.auth.onAuthStateChange((ev, session) => {
-      if (ev === 'SIGNED_IN' && session && state.mode !== 'cloud') enterCloud(session.user);
+      if (ev === 'SIGNED_IN' && session && state.mode !== 'cloud') enterCloud(session);
     });
   }
   if (lsGet('rafeeq2.mode', null) === 'local') { enterLocal(); return; }
@@ -62,15 +79,19 @@ export function enterLocal() {
   state.mode = 'local'; state.user = null; lsSet('rafeeq2.mode', 'local');
   loadLocal(); state.sync.status = 'local'; emit('auth');
 }
-async function enterCloud(u) {
+async function enterCloud(session) {
+  const u = session.user;
   state.mode = 'cloud';
   state.user = { id: u.id, email: u.email, name: u.user_metadata?.full_name || u.user_metadata?.name || '' };
   lsDel('rafeeq2.mode');
   loadLocal();
   if (!state.profile.display_name && state.user.name) state.profile.display_name = state.user.name;
+  state.drive.linked = lsGet('rafeeq2.drive.' + u.id, null);
   emit('auth');
+  await captureDriveGrant(session);
   await syncNow();
   pullProfile();
+  refreshDriveStatus();
 }
 export async function signInGoogle() {
   if (!sb) return { error: 'not-configured' };
@@ -81,7 +102,8 @@ export async function signOut({ wipe = true } = {}) {
   if (state.mode === 'cloud' && sb) { try { await sb.auth.signOut(); } catch { } }
   if (wipe) { lsDel(K.cache()); lsDel(K.outbox()); lsDel(K.cursor()); }
   lsDel('rafeeq2.mode');
-  state.mode = null; state.user = null; state.tasks = []; state.people = []; outbox = new Set();
+  state.mode = null; state.user = null; state.tasks = []; state.people = []; state.files = []; outbox = new Set();
+  state.drive = { linked: null, justLinked: false }; driveTok = null;
   emit('auth');
 }
 /** Local data that exists on this device from "use without account". */
@@ -96,6 +118,54 @@ export function adoptLocalLeftovers() {
   return c.tasks.length;
 }
 
+/* ---------- Google Drive link ----------
+   The user grants drive.file once (redirect, works in installed apps too). Google's long-lived
+   refresh token is stored server-side; the browser gets short-lived access tokens from the
+   `google-token` Edge Function. The browser never stores the refresh token. */
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+let driveTok = null; // { token, exp }
+
+export async function connectDrive() {
+  if (!sb || state.mode !== 'cloud') return { error: 'not-signed-in' };
+  lsSet('rafeeq2.driveConnecting', Date.now());
+  const redirectTo = location.origin + location.pathname;
+  return sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo, scopes: DRIVE_SCOPE, queryParams: { access_type: 'offline', prompt: 'consent', login_hint: state.user?.email || '' } } });
+}
+async function captureDriveGrant(session) {
+  const wanted = lsGet('rafeeq2.driveConnecting', null);
+  if (!session.provider_refresh_token) {
+    if (wanted && Date.now() - wanted > 10 * 60000) lsDel('rafeeq2.driveConnecting');
+    return;
+  }
+  lsDel('rafeeq2.driveConnecting');
+  if (session.provider_token) driveTok = { token: session.provider_token, exp: Date.now() + 50 * 60000 };
+  const { error } = await sb.rpc('save_google_link', { rt: session.provider_refresh_token, sc: DRIVE_SCOPE });
+  if (!error) { setDriveLinked(true); state.drive.justLinked = !!wanted; emit('drive'); }
+}
+function setDriveLinked(v) { state.drive.linked = v; if (state.user) lsSet('rafeeq2.drive.' + state.user.id, v); }
+export async function refreshDriveStatus() {
+  if (!sb || state.mode !== 'cloud' || !navigator.onLine) return;
+  const { data, error } = await sb.rpc('google_link_status');
+  if (!error && typeof data === 'boolean' && data !== state.drive.linked) { setDriveLinked(data); emit('drive'); }
+}
+export async function unlinkDrive() {
+  if (!sb) return;
+  await sb.rpc('unlink_google');
+  driveTok = null; setDriveLinked(false); emit('drive');
+}
+/** A valid Google access token for Drive, or throws { code: 'not_linked' | 'offline' | 'server' }. */
+export async function driveToken(force = false) {
+  if (!force && driveTok && Date.now() < driveTok.exp - 60000) return driveTok.token;
+  if (!navigator.onLine) throw { code: 'offline' };
+  const { data, error } = await sb.functions.invoke('google-token', { body: {} });
+  if (error) throw { code: 'server', detail: error.message };
+  if (data?.error === 'not_linked') { driveTok = null; setDriveLinked(false); emit('drive'); throw { code: 'not_linked' }; }
+  if (!data?.access_token) throw { code: 'server', detail: data?.error || '' };
+  driveTok = { token: data.access_token, exp: Date.now() + (data.expires_in || 3600) * 1000 };
+  if (!state.drive.linked) { setDriveLinked(true); emit('drive'); }
+  return driveTok.token;
+}
+
 /* ---------- profile ---------- */
 async function pullProfile() {
   if (!sb || state.mode !== 'cloud') return;
@@ -106,8 +176,8 @@ async function pullProfile() {
     else pushProfile();
   }
 }
-export function saveProfile(patch) {
-  Object.assign(state.profile, patch); saveLocal(); emit('profile');
+export function saveProfile(patch, { quiet = false } = {}) {
+  Object.assign(state.profile, patch); saveLocal(); if (!quiet) emit('profile');
   if (state.mode === 'cloud') { lsSet('rafeeq2.profileDirty.' + state.user.id, true); pushProfile(); }
 }
 async function pushProfile() {
@@ -117,29 +187,31 @@ async function pushProfile() {
 }
 
 /* ---------- mutations ---------- */
-const TASK_COLS = ['id', 'title', 'details', 'status', 'priority', 'role', 'due', 'project', 'source', 'waiting_on', 'waiting_what', 'notes', 'steps_done', 'steps_total', 'completed_on', 'result', 'archived', 'followups', 'log', 'deleted', 'client_ts', 'created_at'];
-const PEOPLE_COLS = ['id', 'name', 'org', 'contact', 'notes', 'deleted', 'client_ts', 'created_at'];
+const COLS = {
+  tasks: ['id', 'title', 'details', 'status', 'priority', 'role', 'due', 'project', 'source', 'waiting_on', 'waiting_what', 'notes', 'steps_done', 'steps_total', 'completed_on', 'result', 'archived', 'followups', 'log', 'deleted', 'client_ts', 'created_at'],
+  people: ['id', 'name', 'org', 'contact', 'notes', 'deleted', 'client_ts', 'created_at'],
+  files: ['id', 'drive_id', 'name', 'mime', 'size', 'task_id', 'person_id', 'note', 'deleted', 'client_ts', 'created_at'],
+};
 export function newTask(fields = {}) {
   return Object.assign({ id: uuid(), title: '', details: '', status: 'todo', priority: 'mid', role: 'exec', due: null, project: '', source: '', waiting_on: null, waiting_what: 'reply', notes: '', steps_done: 0, steps_total: 0, completed_on: null, result: '', archived: false, followups: [], log: [], deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields);
 }
 export function newPerson(name) { return { id: uuid(), name: name.trim().replace(/\s+/g, ' '), org: '', contact: '', notes: '', deleted: false, client_ts: nowISO(), created_at: nowISO() }; }
+export function newFile(fields = {}) { return Object.assign({ id: uuid(), drive_id: '', name: '', mime: '', size: 0, task_id: null, person_id: null, note: '', deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields); }
 
-export function putTask(t) {
-  t.client_ts = nowISO();
-  const i = state.tasks.findIndex(x => x.id === t.id);
-  if (i >= 0) state.tasks[i] = t; else state.tasks.push(t);
-  outbox.add('tasks:' + t.id); saveLocal(); emit('data'); scheduleFlush();
+function put(tbl, obj) {
+  obj.client_ts = nowISO();
+  const list = listOf(tbl);
+  const i = list.findIndex(x => x.id === obj.id);
+  if (i >= 0) list[i] = obj; else list.push(obj);
+  outbox.add(tbl + ':' + obj.id); saveLocal(); emit('data'); scheduleFlush();
 }
-export function putPerson(p) {
-  p.client_ts = nowISO();
-  const i = state.people.findIndex(x => x.id === p.id);
-  if (i >= 0) state.people[i] = p; else state.people.push(p);
-  outbox.add('people:' + p.id); saveLocal(); emit('data'); scheduleFlush();
-}
-export function bulkReplace({ tasks, people }) {
+export const putTask = t => put('tasks', t);
+export const putPerson = p => put('people', p);
+export const putFile = f => put('files', f);
+export function bulkReplace({ tasks, people, files }) {
   // used by import: everything becomes pending upload
-  state.tasks = tasks; state.people = people;
-  tasks.forEach(t => outbox.add('tasks:' + t.id)); people.forEach(p => outbox.add('people:' + p.id));
+  state.tasks = tasks; state.people = people; if (files) state.files = files;
+  tasks.forEach(t => outbox.add('tasks:' + t.id)); people.forEach(p => outbox.add('people:' + p.id)); (files || []).forEach(f => outbox.add('files:' + f.id));
   saveLocal(); emit('data'); scheduleFlush(50);
 }
 
@@ -155,17 +227,17 @@ async function flush() {
   flushing = true; setSync('syncing');
   const keys = [...outbox];
   const snap = new Map();
-  const rows = { tasks: [], people: [] };
+  const rows = { tasks: [], people: [], files: [] };
   for (const k of keys) {
     const [tbl, id] = k.split(':');
-    const obj = (tbl === 'tasks' ? state.tasks : state.people).find(x => x.id === id);
+    if (!COLS[tbl]) { outbox.delete(k); continue; }
+    const obj = listOf(tbl).find(x => x.id === id);
     if (!obj) { outbox.delete(k); continue; }
-    const cols = tbl === 'tasks' ? TASK_COLS : PEOPLE_COLS;
-    const row = {}; cols.forEach(c => { if (obj[c] !== undefined) row[c] = obj[c]; });
+    const row = {}; COLS[tbl].forEach(c => { if (obj[c] !== undefined) row[c] = obj[c]; });
     rows[tbl].push(row); snap.set(k, obj.client_ts);
   }
   try {
-    for (const tbl of ['people', 'tasks']) {
+    for (const tbl of TABLES) {
       for (let i = 0; i < rows[tbl].length; i += 200) {
         const { error } = await sb.from(tbl).upsert(rows[tbl].slice(i, i + 200), { onConflict: 'id' });
         if (error) throw error;
@@ -173,7 +245,7 @@ async function flush() {
     }
     for (const [k, ts] of snap) {
       const [tbl, id] = k.split(':');
-      const obj = (tbl === 'tasks' ? state.tasks : state.people).find(x => x.id === id);
+      const obj = listOf(tbl).find(x => x.id === id);
       if (!obj || obj.client_ts === ts) outbox.delete(k); // changed again while in flight → keep queued
     }
     saveLocal(); backoff = 2000; state.sync.last = nowISO();
@@ -190,7 +262,7 @@ async function pull() {
   if (state.mode !== 'cloud' || !sb || !navigator.onLine) return;
   const since = lsGet(K.cursor(), '1970-01-01T00:00:00Z');
   let maxTs = since, changed = false;
-  for (const tbl of ['people', 'tasks']) {
+  for (const tbl of TABLES) {
     let from = 0;
     for (;;) {
       const { data, error } = await sb.from(tbl).select('*').gt('updated_at', since).order('updated_at', { ascending: true }).range(from, from + 499);
@@ -198,7 +270,7 @@ async function pull() {
       for (const r of data) {
         if (r.updated_at > maxTs) maxTs = r.updated_at;
         if (outbox.has(tbl + ':' + r.id)) continue; // local edit pending → local wins, it will be pushed
-        const list = tbl === 'tasks' ? state.tasks : state.people;
+        const list = listOf(tbl);
         const i = list.findIndex(x => x.id === r.id);
         delete r.user_id; delete r.updated_at;
         if (i >= 0) list[i] = r; else list.push(r);

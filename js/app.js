@@ -1,5 +1,6 @@
 // رفيق — application UI (mobile-first, RTL/LTR, light by default)
-import { state, onChange, boot, enterLocal, signInGoogle, signOut, cloudReady, putTask, putPerson, newTask, newPerson, saveProfile, syncNow, uuid, nowISO, bulkReplace, localLeftovers, adoptLocalLeftovers } from './data.js';
+import { state, onChange, boot, enterLocal, signInGoogle, signOut, cloudReady, putTask, putPerson, putFile, newTask, newPerson, newFile, saveProfile, syncNow, uuid, nowISO, bulkReplace, localLeftovers, adoptLocalLeftovers, authError, connectDrive, unlinkDrive, refreshDriveStatus } from './data.js';
+import { uploadFile, trashFile, renameFile, fileBlob, viewUrl, previewUrl, rootFolderUrl, kindOf, extLabel, fmtSize, MAX_BYTES } from './drive.js';
 import { parseCapture, today, addDays, diffDays, pd, ds, nextWeekday, addWorkdays, isWeekend, validDate, findPeople, nameTokens, normAr } from './parse.js';
 import { DICT } from './i18n.js';
 
@@ -53,6 +54,11 @@ const ic = {
   minus: I('<path d="M5 12h14"/>', 'stroke-width="2.4"'),
   note: I('<path d="M5 4h14v16H5z"/><path d="M8 9h8M8 13h8M8 17h5"/>'),
   spark: I('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>'),
+  folder: I('<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  clip: I('<path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>'),
+  ext: I('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
+  link: I('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
+  retry: I('<path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.5M20 3v5.5h-5.5"/>'),
 };
 const sic = (k, s = 14) => ic[k].replace('<svg', `<svg width="${s}" height="${s}"`);
 const gLogo = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-1.9 3.2-4.8 3.2-8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.7c-1 .7-2.2 1-3.7 1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 0 1 0-4.2V7.1H2.1a11 11 0 0 0 0 9.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1l3.7 2.8C6.7 7.3 9.1 5.4 12 5.4z"/></svg>';
@@ -63,6 +69,11 @@ const people = () => state.people.filter(p => !p.deleted).sort((a, b) => a.name.
 const taskById = id => state.tasks.find(x => x.id === id);
 const personById = id => state.people.find(p => p.id === id);
 const pname = id => { const p = personById(id); return p && !p.deleted ? p.name : t('deletedPerson'); };
+const files = () => state.files.filter(f => !f.deleted).sort((a, b) => (b.created_at || '') > (a.created_at || '') ? 1 : -1);
+const fileById = id => state.files.find(f => f.id === id);
+const filesOfTask = id => files().filter(f => f.task_id === id);
+const filesOfPerson = id => files().filter(f => f.person_id === id);
+const localDay = iso => ds(new Date(iso || Date.now()));
 const initials = n => { const s = String(n || '').replace(/^(?:م|د|أ|ا|Eng|Dr|Mr|Mrs|Ms)\.?\s+/i, '').trim(); const m = s.match(/[\p{L}\p{N}]/u); return m ? m[0].toUpperCase() : '?'; };
 const isOpen = x => ['todo', 'prog', 'wait', 'hold'].includes(x.status);
 const isLate = x => isOpen(x) && x.due && x.due < T();
@@ -82,7 +93,7 @@ function sortTasks(list) {
 const nextWorkday = () => addWorkdays(T(), 1);
 
 /* ================= UI state ================= */
-const UI = { tab: 'today', seg: 'active', personF: null, q: '', layers: [], theme: null, booting: true };
+const UI = { tab: 'today', seg: 'active', personF: null, q: '', layers: [], theme: null, booting: true, lq: '', ltype: 'all', lmonth: '' };
 
 /* ================= toast ================= */
 let toastTimer;
@@ -130,13 +141,20 @@ function renderLogin() {
         <li><span class="fi">${ic.users}</span><span><b>${t('feat2t')}</b>${t('feat2d')}</span></li>
         <li><span class="fi">${ic.cloud}</span><span><b>${t('feat3t')}</b>${t('feat3d')}</span></li>
       </ul>
+      ${authError ? `<div class="notice err" role="alert"><b>${t('authErrTitle')}</b><span>${t(authErrKey())}</span></div>` : ''}
       <div class="login-actions">
         ${cloudReady ? `<button type="button" class="gbtn" data-act="google">${gLogo}${t('continueGoogle')}</button>` : `<div class="notice">${t('cloudNotReady')}</div>`}
         <button type="button" class="btn ghost block" data-act="local">${t('useLocal')}</button>
         <button type="button" class="linkbtn" data-act="lang">${L() === 'ar' ? 'English' : 'العربية'}</button>
       </div>
-      <p class="legal">${t('loginLegal')}</p>
+      <p class="legal">${t('loginLegal')} <a href="privacy.html">${t('privacy')}</a></p>
     </div>`;
+}
+function authErrKey() {
+  const d = (authError?.detail || '') + ' ' + (authError?.code || '');
+  if (/access_denied|cancel/i.test(d)) return 'authErrDenied';
+  if (/exchange external code|invalid_client|redirect_uri|unauthorized_client/i.test(d)) return 'authErrSetup';
+  return 'authErrGeneric';
 }
 function renderOnboarding() {
   $('#login').hidden = true; $('#app').hidden = false;
@@ -157,9 +175,10 @@ function renderNav() {
   $('#nav').innerHTML = `<div class="nav-brand"><span class="brand-mark sm">${L() === 'ar' ? 'ر' : 'R'}</span><b>${t('appName')}</b></div>
     ${tab('today', ic.today, t('navToday'))}${tab('tasks', ic.list, t('navTasks'))}
     <button type="button" class="addbtn" data-act="capture" aria-label="${esc(t('add'))}">${ic.plus}<span class="lbl">${t('addTask')}</span></button>
-    ${tab('people', ic.users, t('navPeople'))}${tab('more', ic.more, t('navMore'))}
+    ${tab('people', ic.users, t('navPeople'))}${tab('library', ic.folder, t('navLibrary'))}${tab('more', ic.more, t('navMore')).replace('class="tab', 'class="tab deskonly')}
     <div class="nav-foot">${syncChip()}</div>`;
 }
+const meBtn = () => `<button type="button" class="me mob" data-tab="more" aria-label="${esc(t('navMore'))}"><span class="av">${esc(initials(state.profile.display_name || '?'))}</span></button>`;
 const badgeCount = () => live().filter(isLate).length + live().filter(isOpen).reduce((n, x) => n + openFus(x).filter(fuLate).length, 0);
 function syncChip() {
   const s = state.sync;
@@ -219,6 +238,164 @@ function fuRow(x, f) {
 const sec = (title, n, body, cls = '') => `<section class="sec"><div class="sec-h"><h3>${title}</h3>${n != null ? `<span class="cnt ${cls}">${n}</span>` : ''}</div><div class="stack">${body}</div></section>`;
 const emptyBox = (title, text, btn = '') => `<div class="empty"><div class="empty-ic">${ic.note}</div><h3>${title}</h3><p>${text}</p>${btn}</div>`;
 
+/* ---------- library components ---------- */
+const monthLabel = ym => new Intl.DateTimeFormat(LOC(), { month: 'long', year: 'numeric' }).format(pd(ym + '-01'));
+const ftile = f => `<span class="ftile k-${kindOf(f)}" aria-hidden="true">${extLabel(f)}</span>`;
+function fileRow(f, { ctx } = {}) {
+  const tk = f.task_id && ctx !== 'task' ? taskById(f.task_id) : null;
+  const meta = [
+    f.size ? `<span class="num"><bdi>${fmtSize(f.size)}</bdi></span>` : '',
+    `<span class="num">${fmtShort(localDay(f.created_at))}</span>`,
+    tk && !tk.deleted ? `<span class="lnk" dir="auto">${sic('list', 13)} ${esc(tk.title.length > 40 ? tk.title.slice(0, 40) + '…' : tk.title)}</span>` : '',
+    f.person_id && ctx !== 'person' ? `<span dir="auto">${sic('user', 13)} ${esc(pname(f.person_id))}</span>` : '',
+  ].filter(Boolean).join('');
+  return `<button type="button" class="frow" data-file="${f.id}">${ftile(f)}<span class="body"><span class="t" dir="auto">${esc(f.name)}</span><span class="meta">${meta}</span>${f.note ? `<span class="fnote" dir="auto">${esc(f.note)}</span>` : ''}</span></button>`;
+}
+function driveCard() {
+  if (state.drive.linked === null && navigator.onLine) return `<div class="card drive-card muted">${t('driveChecking')}</div>`;
+  return `<div class="card drive-card"><div class="dc-top"><span class="mi">${ic.folder}</span><div><b>${t('connectTitle')}</b><p>${t('connectText')}</p></div></div><button type="button" class="gbtn sm" data-act="connectdrive">${gLogo}${t('connectBtn')}</button><p class="note">${t('connectNote')}</p></div>`;
+}
+
+/* ---------- uploads ---------- */
+const UPQ = []; let upRunning = false;
+function uploadsBox(ctx) {
+  const items = UPQ.filter(u => (!ctx.task || u.task_id === ctx.task) && (!ctx.person || u.person_id === ctx.person));
+  const inner = items.map(u => {
+    const st = u.st === 'up' ? t('upUp', { p: Math.round(u.p * 100) }) : u.st === 'wait' ? t('upWait') : u.st === 'done' ? t('upDone') : t(u.err === 'offline' ? 'upOffline' : u.err === 'not_linked' ? 'upNotLinked' : u.err === 'missing_secret' ? 'upSetup' : 'upErr');
+    return `<div class="uprow ${u.st}" data-up="${u.id}">${ftile({ name: u.name, mime: u.mime })}<div class="body"><div class="t" dir="auto">${esc(u.name)}</div><div class="bar"><i data-upbar="${u.id}" style="width:${Math.round((u.st === 'done' ? 1 : u.p) * 100)}%"></i></div><div class="meta"><span data-upst="${u.id}">${st}</span><span class="num"><bdi>${fmtSize(u.size)}</bdi></span></div></div>
+      ${u.st === 'err' ? (u.err === 'not_linked' ? `<button type="button" class="btn sm primary" data-act="connectdrive">${t('connectShort')}</button>` : `<button type="button" class="iconbtn sm" data-act="retryup" data-up="${u.id}" aria-label="${esc(t('retry'))}">${ic.retry}</button>`) : ''}
+      ${u.st !== 'up' && u.st !== 'done' ? `<button type="button" class="iconbtn sm" data-act="dropup" data-up="${u.id}" aria-label="${esc(t('remove'))}">${ic.x}</button>` : ''}</div>`;
+  }).join('');
+  return `<div class="ups" data-ups="${esc(JSON.stringify(ctx))}">${inner}</div>`;
+}
+function drawUps() {
+  document.querySelectorAll('[data-ups]').forEach(el => { let ctx = {}; try { ctx = JSON.parse(el.dataset.ups); } catch { } el.outerHTML = uploadsBox(ctx); });
+}
+function pickFiles(ctx = {}) {
+  if (state.mode !== 'cloud') { toast(t('libNeedsAccount')); return; }
+  if (state.drive.linked !== true) { openConnectSheet(); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.multiple = true; inp.hidden = true;
+  inp.onchange = () => { queueFiles([...inp.files], ctx); inp.remove(); };
+  document.body.appendChild(inp); inp.click();
+  setTimeout(() => inp.isConnected && !inp.files?.length && inp.remove(), 120000);
+}
+function queueFiles(list, ctx) {
+  if (!list.length) return;
+  list.forEach(file => {
+    if (file.size > MAX_BYTES) { toast(t('tooBig', { n: file.name }), null, 'err'); return; }
+    UPQ.push({ id: uuid(), file, name: file.name || 'file', size: file.size, mime: file.type || '', task_id: ctx.task || null, person_id: ctx.person || (ctx.task ? null : null), p: 0, st: 'wait', err: '' });
+  });
+  drawUps(); runUploads();
+}
+async function runUploads() {
+  if (upRunning) return; upRunning = true;
+  let done = 0;
+  try {
+    for (;;) {
+      const u = UPQ.find(x => x.st === 'wait'); if (!u) break;
+      u.st = 'up'; u.p = 0; drawUps();
+      try {
+        const r = await uploadFile(u.file, { onProgress: p => { u.p = p; const b = document.querySelector(`[data-upbar="${u.id}"]`); if (b) b.style.width = Math.round(p * 100) + '%'; const st = document.querySelector(`[data-upst="${u.id}"]`); if (st) st.textContent = t('upUp', { p: Math.round(p * 100) }); } });
+        const fr = newFile({ drive_id: r.id, name: r.name || u.name, mime: r.mimeType || u.mime, size: Number(r.size) || u.size, task_id: u.task_id, person_id: u.person_id });
+        UPQ.splice(UPQ.indexOf(u), 1); done++;
+        putFile(fr);
+        const x = u.task_id ? taskById(u.task_id) : null;
+        if (x) { addLog(x, 'file_added', fr.name); putTask(x); }
+      } catch (e) {
+        u.st = 'err'; u.err = e?.code === 'server' && e.detail === 'missing_secret' ? 'missing_secret' : (e?.code || 'drive');
+        console.warn('upload failed', e);
+        if (u.err === 'not_linked' || u.err === 'offline' || u.err === 'missing_secret') UPQ.forEach(x => { if (x.st === 'wait') { x.st = 'err'; x.err = u.err; } });
+      }
+      drawUps();
+    }
+  } finally { upRunning = false; }
+  if (done && !UPQ.length) toast(plural(done, 'uploaded'));
+}
+function openConnectSheet() {
+  openSheet(t('connectTitle'), `<div class="connect"><span class="mi lg">${ic.folder}</span><p>${t('connectText')}</p><ul class="ticks"><li>${sic('check', 15)}${t('connectP1')}</li><li>${sic('check', 15)}${t('connectP2')}</li><li>${sic('check', 15)}${t('connectP3')}</li></ul>
+    <button type="button" class="gbtn" data-act="connectgo">${gLogo}${t('connectBtn')}</button><p class="note">${t('connectNote')}</p></div>`);
+}
+
+/* ---------- file details ---------- */
+const blobCache = new Map();
+function openFile(id) {
+  const Lr = pushLayer(() => {
+    const f = fileById(id);
+    if (!f || f.deleted) return topBar('') + `<div class="layer-b"><div class="empty small"><p>${t('notFound')}</p></div></div>`;
+    const tk = f.task_id ? taskById(f.task_id) : null;
+    return topBar(`<span dir="auto">${esc(f.name)}</span>`, `<button type="button" class="iconbtn" data-act="editfile" data-fid="${f.id}" aria-label="${esc(t('edit'))}">${ic.edit}</button>`) + `<div class="layer-b">
+      <div class="fprev k-${kindOf(f)}" data-keep="pv-${f.id}" data-pv="${f.id}"></div>
+      <div class="save-row"><a class="btn primary block" href="${viewUrl(f.drive_id)}" target="_blank" rel="noopener">${sic('ext', 18)}${t('openInDrive')}</a><button type="button" class="btn block" data-act="dlfile" data-fid="${f.id}">${sic('download', 18)}${t('download')}</button></div>
+      <div class="kv num">
+        <div><small>${t('fType')}</small><b>${extLabel(f)}</b></div>
+        <div><small>${t('fSize')}</small><b><bdi>${fmtSize(f.size) || '—'}</bdi></b></div>
+        <div><small>${t('fUploaded')}</small><b>${wd(localDay(f.created_at))} ${fmtShort(localDay(f.created_at))}</b></div>
+        <div><small>${t('fPerson')}</small><b dir="auto">${f.person_id ? `<button type="button" class="linkbtn inl" data-person="${f.person_id}">${esc(pname(f.person_id))}</button>` : t('noLink')}</b></div>
+        <div class="wide"><small>${t('fTask')}</small><b dir="auto">${tk && !tk.deleted ? `<button type="button" class="linkbtn inl" data-open="${tk.id}">${esc(tk.title)}</button>` : t('noLink')}</b></div>
+        ${f.note ? `<div class="wide"><small>${t('fNote')}</small><b class="d-text" dir="auto" style="margin:0">${esc(f.note)}</b></div>` : ''}
+      </div>
+      <div class="danger-row"><button type="button" class="btn sm ghost danger" data-act="delfile" data-fid="${f.id}">${sic('trash', 16)}${t('delete')}</button></div>
+    </div>`;
+  });
+  const f = fileById(id); if (f) mountPreview(Lr.el, f);
+}
+async function mountPreview(root, f) {
+  const box = root.querySelector(`[data-pv="${f.id}"]`); if (!box || box.dataset.loaded) return;
+  box.dataset.loaded = '1';
+  const fallback = () => { box.innerHTML = `<iframe src="${previewUrl(f.drive_id)}" title="${esc(f.name)}" loading="lazy" allow="autoplay" referrerpolicy="no-referrer"></iframe>`; };
+  if (kindOf(f) !== 'img') { fallback(); return; }
+  box.innerHTML = `<div class="pv-wait"><span class="spin"></span></div>`;
+  try {
+    let url = blobCache.get(f.drive_id);
+    if (!url) { url = URL.createObjectURL(await fileBlob(f.drive_id)); blobCache.set(f.drive_id, url); }
+    box.innerHTML = `<img src="${url}" alt="${esc(f.name)}">`;
+  } catch (e) { console.warn(e); fallback(); }
+}
+async function downloadFile(f) {
+  toast(t('downloading'));
+  try {
+    const blob = await fileBlob(f.drive_id);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = f.name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) {
+    console.warn(e);
+    if (e?.code === 'not_linked') return openConnectSheet();
+    window.open(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(f.drive_id)}`, '_blank', 'noopener');
+  }
+}
+function taskOptions(sel) {
+  const open = sortTasks(live().filter(isOpen)), rest = live().filter(x => !isOpen(x)).sort((a, b) => (b.completed_on || '') > (a.completed_on || '') ? 1 : -1).slice(0, 60);
+  const cut = s => s.length > 70 ? s.slice(0, 70) + '…' : s;
+  return `<option value="">${t('noLink')}</option>${open.length ? `<optgroup label="${esc(t('segActive'))}">${open.map(x => `<option value="${x.id}" ${sel === x.id ? 'selected' : ''}>${esc(cut(x.title))}</option>`).join('')}</optgroup>` : ''}${rest.length ? `<optgroup label="${esc(t('segDone'))}">${rest.map(x => `<option value="${x.id}" ${sel === x.id ? 'selected' : ''}>${esc(cut(x.title))}</option>`).join('')}</optgroup>` : ''}`;
+}
+function openFileForm(f) {
+  openSheet(t('editFile'), `<form id="fForm" class="form" autocomplete="off">
+      <label class="fld"><span>${t('fName')}</span><input name="name" required maxlength="300" dir="auto" value="${esc(f.name)}"></label>
+      <label class="fld"><span>${t('fTask')}</span><select name="task">${taskOptions(f.task_id)}</select></label>
+      <label class="fld"><span>${t('fPerson')}</span><select name="person"><option value="">${t('noLink')}</option>${people().map(p => `<option value="${p.id}" ${f.person_id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+      <label class="fld"><span>${t('fNote')} <em>${t('optional')}</em></span><textarea name="note" rows="2" dir="auto" placeholder="${esc(t('fNotePh'))}">${esc(f.note)}</textarea></label>
+      <div class="save-row"><button class="btn primary block" type="submit">${ic.check}${t('save')}</button></div></form>`, {
+    onMount: sh => sh.querySelector('#fForm').onsubmit = async e => {
+      e.preventDefault(); const fd = new FormData(e.target);
+      const name = (fd.get('name') || '').trim().replace(/\s+/g, ' '); if (!name) return;
+      const prevName = f.name, prevTask = f.task_id;
+      f.name = name; f.task_id = fd.get('task') || null; f.person_id = fd.get('person') || null; f.note = (fd.get('note') || '').trim();
+      putFile(f); closeSheet(true); toast(t('saved'));
+      if (f.task_id && f.task_id !== prevTask) { const x = taskById(f.task_id); if (x) { addLog(x, 'file_added', f.name); putTask(x); } }
+      if (name !== prevName) { try { await renameFile(f.drive_id, name); } catch (err) { console.warn(err); toast(t('renameDriveFail'), null, 'err'); } }
+    }
+  });
+  sheetState.guard = true;
+}
+function deleteFile(f) {
+  confirmSheet(t('delFileQ'), t('delete'), async () => {
+    try { await trashFile(f.drive_id); }
+    catch (e) { if (e?.code !== 'not_found') { toast(e?.code === 'offline' ? t('needOnline') : t('delFileFail'), null, 'err'); return; } }
+    f.deleted = true; putFile(f); popLayer(); toast(t('fileTrashed'));
+  });
+}
+
 /* ================= views ================= */
 const VIEWS = {
   today() {
@@ -236,7 +413,7 @@ const VIEWS = {
     const why = !pick ? '' : isLate(pick) ? lateTxt(pick.due) : pick.due === td ? t('dueToday') : pick.priority === 'hi' ? t('prioHi') : pick.status === 'prog' ? t('stProg') : pick.due ? t('nearestDue') : '';
     let hijri = ''; try { hijri = new Intl.DateTimeFormat((L() === 'ar' ? 'ar-SA' : 'en') + '-u-ca-islamic-umalqura-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date()); } catch { }
     const name = (state.profile.display_name || '').split(' ')[0];
-    let h = `<header class="hdr"><div class="grow"><div class="sub">${esc(hijri)}</div><h1>${wd(td)}${L() === 'ar' ? '،' : ','} ${fmt(td)}</h1>${name ? `<div class="hello">${t('hello', { n: esc(name) })}</div>` : ''}</div><div class="hdr-side">${syncChip()}</div></header>`;
+    let h = `<header class="hdr"><div class="grow"><div class="sub">${esc(hijri)}</div><h1>${wd(td)}${L() === 'ar' ? '،' : ','} ${fmt(td)}</h1>${name ? `<div class="hello">${t('hello', { n: esc(name) })}</div>` : ''}</div><div class="hdr-side">${syncChip()}</div>${meBtn()}</header>`;
     if (!live().length) {
       return h + emptyBox(t('emptyTitle'), t('emptyText'), `<button type="button" class="btn primary lg" data-act="capture">${ic.plus}${t('addFirst')}</button>`) + leftoversBanner();
     }
@@ -265,7 +442,7 @@ const VIEWS = {
     const pc = id => live().filter(x => isOpen(x) && (x.waiting_on === id || openFus(x).some(f => f.person_id === id))).length;
     const ppl = people().filter(p => pc(p.id)).slice(0, 12);
     const openN = live().filter(isOpen).length;
-    return `<header class="hdr"><div class="grow"><h1>${t('navTasks')}</h1><div class="sub">${plural(openN, 'openTasks')}</div></div><button type="button" class="btn primary sm desk" data-act="newtask">${ic.plus}${t('newTask')}</button></header>
+    return `<header class="hdr"><div class="grow"><h1>${t('navTasks')}</h1><div class="sub">${plural(openN, 'openTasks')}</div></div><button type="button" class="btn primary sm desk" data-act="newtask">${ic.plus}${t('newTask')}</button>${meBtn()}</header>
       <label class="search">${ic.search}<input type="search" id="taskQ" value="${esc(UI.q)}" placeholder="${esc(t('searchTasks'))}" aria-label="${esc(t('searchTasks'))}" dir="auto"></label>
       ${ppl.length ? `<div class="people-row">${ppl.map(p => `<button type="button" class="pchip ${UI.personF === p.id ? 'on' : ''}" data-pf="${p.id}"><span class="av">${esc(initials(p.name))}</span><span class="nm" dir="auto">${esc(p.name.replace(/^(?:م|د|أ|ا)\.\s*/, '').split(' ')[0])}</span><i class="num">${pc(p.id)}</i></button>`).join('')}</div>` : ''}
       <div class="seg" role="tablist">${[['active', 'segActive'], ['wait', 'segWait'], ['done', 'segDone']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${UI.seg === k}" class="${UI.seg === k ? 'on' : ''}" data-seg="${k}">${t(l)}</button>`).join('')}</div>
@@ -276,8 +453,35 @@ const VIEWS = {
   people() {
     const ppl = people();
     const stats = id => { let open = 0, late = 0, last = null; live().forEach(x => { (x.followups || []).forEach(f => { if (f.person_id !== id) return; if (f.status === 'open' && isOpen(x)) { open++; if (fuLate(f)) late++; } (f.log || []).forEach(l => { if (!last || l.date > last) last = l.date; }); }); if (x.waiting_on === id && x.status === 'wait') open++; }); return { open, late, last }; };
-    return `<header class="hdr"><div class="grow"><h1>${t('navPeople')}</h1><div class="sub">${t('peopleSub')}</div></div><button type="button" class="btn primary sm" data-act="newperson">${ic.plus}${t('add')}</button></header>
+    return `<header class="hdr"><div class="grow"><h1>${t('navPeople')}</h1><div class="sub">${t('peopleSub')}</div></div><button type="button" class="btn primary sm" data-act="newperson">${ic.plus}${t('add')}</button>${meBtn()}</header>
       ${ppl.length ? `<div class="stack">${ppl.map(p => { const s = stats(p.id); return `<button type="button" class="prow" data-person="${p.id}"><span class="av lg">${esc(initials(p.name))}</span><span class="body"><span class="t" dir="auto">${esc(p.name)}</span>${p.org ? `<span class="sub" dir="auto">${esc(p.org)}</span>` : ''}<span class="meta">${s.open ? `<span class="pill ${s.late ? 'late' : 'prog'}">${plural(s.open, 'openFu')}</span>` : ''}<span>${s.last ? t('lastContact', { d: rel(s.last) }) : t('noContact')}</span></span></span>${sic('back', 18).replace('<svg', '<svg class="chev"')}</button>`; }).join('')}</div>` : emptyBox(t('noPeople'), t('noPeopleText'), `<button type="button" class="btn primary" data-act="newperson">${ic.plus}${t('addPerson')}</button>`)}`;
+  },
+  library() {
+    const all = files();
+    const cloud = state.mode === 'cloud';
+    const linked = state.drive.linked === true;
+    const head = `<header class="hdr"><div class="grow"><h1>${t('navLibrary')}</h1><div class="sub">${cloud && all.length ? plural(all.length, 'files') : t('libSub')}</div></div>${cloud ? `<button type="button" class="btn primary sm" data-act="upload">${ic.upload}${t('uploadFile')}</button>` : ''}${meBtn()}</header>`;
+    if (!cloud) return head + emptyBox(t('libLocalTitle'), t('libLocalText'), cloudReady ? `<button type="button" class="gbtn sm" style="max-width:320px;margin:0 auto" data-act="google">${gLogo}${t('continueGoogle')}</button>` : '');
+    let h = head;
+    if (!linked) h += driveCard();
+    h += uploadsBox({});
+    if (!all.length) return h + (linked ? emptyBox(t('libEmptyTitle'), t('libEmptyText'), `<button type="button" class="btn primary lg" data-act="upload">${ic.upload}${t('uploadFile')}</button>`) : '');
+    const kinds = [['all', 'tAll'], ['pdf', 'tPdf'], ['sheet', 'tSheet'], ['doc', 'tDoc'], ['img', 'tImg'], ['other', 'tOther']];
+    const kindMatch = f => UI.ltype === 'all' || (UI.ltype === 'other' ? ['other', 'slides'].includes(kindOf(f)) : kindOf(f) === UI.ltype);
+    const months = [...new Set(all.map(f => localDay(f.created_at).slice(0, 7)))].sort().reverse();
+    if (UI.lmonth && !months.includes(UI.lmonth)) UI.lmonth = '';
+    let list = all.filter(kindMatch);
+    if (UI.lmonth) list = list.filter(f => localDay(f.created_at).startsWith(UI.lmonth));
+    if (UI.lq) { const q = normAr(UI.lq); list = list.filter(f => normAr([f.name, f.note, f.task_id ? taskById(f.task_id)?.title : '', f.person_id ? pname(f.person_id) : ''].join(' ')).includes(q)); }
+    const counts = Object.fromEntries(kinds.map(([k]) => [k, k === 'all' ? all.length : all.filter(f => k === 'other' ? ['other', 'slides'].includes(kindOf(f)) : kindOf(f) === k).length]));
+    h += `<label class="search">${ic.search}<input type="search" id="libQ" value="${esc(UI.lq)}" placeholder="${esc(t('searchFiles'))}" aria-label="${esc(t('searchFiles'))}" dir="auto"></label>
+      <div class="lib-filters"><div class="people-row">${kinds.filter(([k]) => k === 'all' || counts[k]).map(([k, l]) => `<button type="button" class="chip ${UI.ltype === k ? 'on' : ''}" data-ltype="${k}">${t(l)} <i class="num">${counts[k]}</i></button>`).join('')}</div>
+      ${months.length > 1 ? `<select class="msel" id="libMonth" aria-label="${esc(t('month'))}"><option value="">${t('allMonths')}</option>${months.map(m => `<option value="${m}" ${UI.lmonth === m ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select>` : ''}</div>`;
+    if (!list.length) return h + `<div class="empty small"><p>${t('noMatch')}</p></div>`;
+    const groups = new Map(); list.forEach(f => { const m = localDay(f.created_at).slice(0, 7); if (!groups.has(m)) groups.set(m, []); groups.get(m).push(f); });
+    h += [...groups].map(([m, fs]) => sec(monthLabel(m), fs.length, fs.map(f => fileRow(f)).join(''))).join('');
+    if (linked) h += `<a class="linkbtn center folder-link" href="${rootFolderUrl()}" target="_blank" rel="noopener">${sic('ext', 15)} ${t('openFolder')}</a>`;
+    return h;
   },
   more() {
     const p = state.profile, u = state.user;
@@ -289,6 +493,9 @@ const VIEWS = {
         <button type="button" data-act="theme"><span class="mi">${ic.moon}</span><span class="grow">${t('appearance')}<small>${(p.settings || {}).theme === 'dark' ? t('themeDark') : t('themeLight')}</small></span></button>
         <button type="button" data-act="ask-date"><span class="mi">${ic.cal}</span><span class="grow">${t('askDueSetting')}<small>${(p.settings || {}).askDue ? t('on') : t('off')}</small></span><span class="switch ${(p.settings || {}).askDue ? 'on' : ''}" aria-hidden="true"></span></button>
       </div>
+      ${state.mode === 'cloud' ? `<div class="menu">${state.drive.linked === true
+        ? `<a href="${rootFolderUrl()}" target="_blank" rel="noopener"><span class="mi">${ic.folder}</span><span class="grow">Google Drive<small>${t('driveOn')}</small></span>${sic('ext', 16)}</a><button type="button" data-act="unlinkdrive"><span class="mi">${ic.link}</span><span class="grow">${t('unlinkDrive')}</span></button>`
+        : `<button type="button" data-act="connectdrive"><span class="mi">${ic.folder}</span><span class="grow">${t('connectBtn')}<small>${t('driveOff')}</small></span></button>`}</div>` : ''}
       <div class="sec-h"><h3>${t('backupTitle')}</h3></div>
       <div class="menu">
         <button type="button" data-act="export"><span class="mi">${ic.download}</span><span class="grow">${t('exportBackup')}<small>${t('exportHint')}</small></span></button>
@@ -298,7 +505,7 @@ const VIEWS = {
       <div class="menu">
         <button type="button" data-act="signout" class="danger"><span class="mi">${ic.logout}</span><span class="grow">${state.mode === 'cloud' ? t('signOut') : t('leaveLocal')}</span></button>
       </div>
-      <p class="about">${t('about', { v: window.RAFEEQ_VERSION || '' })}</p>`;
+      <p class="about">${t('about', { v: window.RAFEEQ_VERSION || '' })} · <a href="privacy.html">${t('privacy')}</a></p>`;
   },
 };
 function v1Data() {
@@ -378,6 +585,7 @@ function logText(e) {
     case 'unarchived': return t('logUnarchived');
     case 'steps': return t('logSteps', { a: d.done, b: d.total });
     case 'edited': return t('logEdited');
+    case 'file_added': return t('logFileAdded');
     default: return '';
   }
 }
@@ -666,7 +874,13 @@ function openProfile() {
 function pushLayer(build) {
   const el = document.createElement('div');
   el.className = 'layer'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
-  const Lr = { el, rerender: () => { const sc = el.querySelector('.layer-b')?.scrollTop || 0; el.innerHTML = build(); const b = el.querySelector('.layer-b'); if (b) b.scrollTop = sc; } };
+  const Lr = { el, rerender: () => {
+    const sc = el.querySelector('.layer-b')?.scrollTop || 0;
+    const kept = [...el.querySelectorAll('[data-keep]')];
+    el.innerHTML = build();
+    kept.forEach(k => { const n = el.querySelector(`[data-keep="${k.dataset.keep}"]`); if (n) n.replaceWith(k); });
+    const b = el.querySelector('.layer-b'); if (b) b.scrollTop = sc;
+  } };
   Lr.rerender();
   $('#layers').appendChild(el); UI.layers.push(Lr);
   $('#layerBackdrop').classList.add('on');
@@ -708,6 +922,8 @@ function openTask(id) {
       <div class="box">${fus.length ? fus.map(f => `<div class="fu ${f.status !== 'open' ? 'closed' : ''}"><div class="fu-top"><span class="av">${esc(initials(pname(f.person_id)))}</span><div class="body"><div class="t" dir="auto">${esc(pname(f.person_id))}</div><div class="meta">${f.what ? `<span dir="auto">${esc(f.what)}</span>` : ''}${f.status === 'open' ? `<span class="pill ${fuLate(f) ? 'late' : f.due <= T() ? 'wait' : ''}">${fuLate(f) ? lateTxt(f.due) : rel(f.due)}</span>` : `<span class="pill done">${t('fuClosed', { d: fmtShort(f.closed_on || T()) })}</span>`}</div></div>
           ${f.status === 'open' && open ? `<button type="button" class="btn sm" data-act="furesult" data-id="${x.id}" data-fu="${f.id}">${t('logResult')}</button>` : ''}<button type="button" class="iconbtn sm" data-act="fumenu" data-id="${x.id}" data-fu="${f.id}" aria-label="${esc(t('edit'))}">${sic('edit', 16)}</button></div>
           ${(f.log || []).length ? `<div class="fu-log">${f.log.map(l => `<div><span class="when num">${fmtShort(l.date)}</span> <span dir="auto">${esc(l.text || (l.outcome === 'done' ? t('fuDone') : t('fuNotYet')))}</span></div>`).join('')}</div>` : ''}</div>`).join('') : `<div class="fu muted">${t('noFollowups')}</div>`}</div>
+      ${state.mode === 'cloud' ? (() => { const fs = filesOfTask(x.id); return `<div class="sec-h"><h3>${t('filesTitle')}</h3>${fs.length ? `<span class="cnt">${fs.length}</span>` : ''}<span class="grow"></span><button type="button" class="btn sm ghost" data-act="upload" data-task="${x.id}">${sic('clip', 16)}${t('attach')}</button></div>
+      <div class="stack fstack">${uploadsBox({ task: x.id })}${fs.length ? fs.map(f => fileRow(f, { ctx: 'task' })).join('') : `<div class="box"><div class="fu muted">${t('noFilesTask')}</div></div>`}</div>`; })() : ''}
       <div class="sec-h"><h3>${t('progressLog')}</h3></div>
       <div class="box"><form class="upd" data-form="upd" data-id="${x.id}"><input name="u" placeholder="${esc(t('updatePh'))}" aria-label="${esc(t('addUpdate'))}" dir="auto"><button type="submit" class="btn primary sm">${t('add')}</button></form>
         <ul class="tl">${logs.map(l => `<li class="${l.kind === 'note' || l.text ? 'k' : ''}"><small class="num">${fmtShort(l.at.slice(0, 10))} · ${new Intl.DateTimeFormat(LOC(), { hour: 'numeric', minute: '2-digit' }).format(new Date(l.at))}</small>${l.kind === 'note' ? `<span dir="auto">${esc(l.text)}</span>` : `<span>${logText(l)}</span>${l.text ? `<span class="lt" dir="auto">${esc(l.text)}</span>` : ''}`}</li>`).join('') || `<li class="muted">${t('noLog')}</li>`}</ul></div>
@@ -733,6 +949,8 @@ function openPerson(id) {
       ${openF.length ? sec(t('openFollowups'), openF.length, openF.map(([x, f]) => fuRow(x, f)).join('')) : ''}
       ${waits.length ? sec(t('waitingOnThem'), waits.length, waits.map(x => taskCard(x, { noSwipe: true })).join('')) : ''}
       ${rel2.filter(x => !waits.includes(x)).length ? sec(t('relatedWork'), null, rel2.filter(x => !waits.includes(x)).map(x => taskCard(x, { noSwipe: true })).join('')) : ''}
+      ${state.mode === 'cloud' ? (() => { const fs = filesOfPerson(p.id); return `<div class="sec-h"><h3>${t('filesTitle')}</h3>${fs.length ? `<span class="cnt">${fs.length}</span>` : ''}<span class="grow"></span><button type="button" class="btn sm ghost" data-act="upload" data-person="${p.id}">${sic('clip', 16)}${t('attach')}</button></div>
+      <div class="stack fstack">${uploadsBox({ person: p.id })}${fs.map(f => fileRow(f, { ctx: 'person' })).join('')}</div>`; })() : ''}
       <div class="sec-h"><h3>${t('contactHistory')}</h3></div>
       <div class="box">${hist.length ? `<ul class="tl">${hist.map(({ x, l, f }) => `<li class="k"><small class="num">${fmtShort(l.date)}</small><span dir="auto">${esc(l.text || (l.outcome === 'done' ? t('fuDone') : t('fuNotYet')))}</span><button type="button" class="linkbtn" data-open="${x.id}" dir="auto">${esc(x.title)}</button></li>`).join('')}</ul>` : `<div class="fu muted">${t('noContact')}</div>`}</div>
       <div class="danger-row"><button type="button" class="btn sm ghost danger" data-act="delperson" data-id="${p.id}">${sic('trash', 16)}${t('delete')}</button></div>
@@ -742,7 +960,7 @@ function openPerson(id) {
 
 /* ================= backup ================= */
 function exportBackup() {
-  const data = { app: 'rafeeq', version: 2, exported_at: nowISO(), profile: state.profile, people: state.people.filter(p => !p.deleted), tasks: state.tasks.filter(x => !x.deleted) };
+  const data = { app: 'rafeeq', version: 2, exported_at: nowISO(), profile: state.profile, people: state.people.filter(p => !p.deleted), tasks: state.tasks.filter(x => !x.deleted), files: state.files.filter(f => !f.deleted) };
   const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `rafeeq-backup-${T()}.json`;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
@@ -764,12 +982,14 @@ function convertV1(d) {
 async function importBackup(file) {
   let d; try { d = JSON.parse(await file.text()); } catch { toast(t('importBad'), null, 'err'); return; }
   if (!d || d.app !== 'rafeeq' || !Array.isArray(d.tasks)) { toast(t('importBad'), null, 'err'); return; }
-  const conv = d.version === 2 ? { people: d.people || [], tasks: d.tasks || [] } : convertV1(d);
+  const conv = d.version === 2 ? { people: d.people || [], tasks: d.tasks || [], files: state.mode === 'cloud' ? (d.files || []) : [] } : convertV1(d);
   confirmSheet(t('importQ', { t: conv.tasks.length, p: conv.people.length }), t('importAdd'), () => {
     const haveT = new Set(state.tasks.map(x => x.id)), haveP = new Set(state.people.map(p => p.id));
     const tasks = state.tasks.concat(conv.tasks.filter(x => !haveT.has(x.id)));
     const ppl = state.people.concat(conv.people.filter(p => !haveP.has(p.id)));
-    bulkReplace({ tasks, people: ppl }); toast(t('imported'));
+    const haveF = new Set(state.files.map(f => f.id));
+    const fls = (conv.files || []).length ? state.files.concat(conv.files.filter(f => !haveF.has(f.id))) : undefined;
+    bulkReplace({ tasks, people: ppl, files: fls }); toast(t('imported'));
   }, false);
 }
 
@@ -780,7 +1000,9 @@ document.addEventListener('click', async e => {
   if ((el = q('[data-jump]'))) { document.getElementById(el.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if ((el = q('[data-seg]'))) { UI.seg = el.dataset.seg; return renderMain(); }
   if ((el = q('[data-pf]'))) { UI.personF = UI.personF === el.dataset.pf ? null : el.dataset.pf; return renderMain(); }
-  if ((el = q('[data-person]'))) return openPerson(el.dataset.person);
+  if ((el = q('[data-ltype]'))) { UI.ltype = el.dataset.ltype; return renderMain(); }
+  if ((el = q('[data-file]'))) return openFile(el.dataset.file);
+  if ((el = q('[data-person]')) && !q('[data-act]')) return openPerson(el.dataset.person);
   el = q('[data-act]');
   if (el) {
     const a = el.dataset.act, id = el.dataset.id, x = id ? taskById(id) : null;
@@ -818,6 +1040,15 @@ document.addEventListener('click', async e => {
       case 'editperson': { const p = personById(id); return p && openPersonForm(p); }
       case 'delperson': { const p = personById(id); return p && confirmSheet(t('delPersonQ'), t('delete'), () => { p.deleted = true; putPerson(p); popLayer(); toast(t('deleted')); }); }
       case 'mic': return toggleMic();
+      case 'upload': return pickFiles({ task: el.dataset.task || null, person: el.dataset.person || null });
+      case 'connectdrive': return openConnectSheet();
+      case 'connectgo': { if (!navigator.onLine) return toast(t('needOnline'), null, 'err'); const r = await connectDrive(); if (r?.error) toast(t('loginFailed'), null, 'err'); return; }
+      case 'unlinkdrive': return confirmSheet(t('unlinkQ'), t('unlinkDrive'), async () => { await unlinkDrive(); toast(t('unlinked')); });
+      case 'retryup': { const u = UPQ.find(y => y.id === el.dataset.up); if (u && u.file) { u.st = 'wait'; u.err = ''; drawUps(); runUploads(); } return; }
+      case 'dropup': { const i = UPQ.findIndex(y => y.id === el.dataset.up); if (i >= 0) UPQ.splice(i, 1); return drawUps(); }
+      case 'editfile': { const fl = fileById(el.dataset.fid); return fl && openFileForm(fl); }
+      case 'dlfile': { const fl = fileById(el.dataset.fid); return fl && downloadFile(fl); }
+      case 'delfile': { const fl = fileById(el.dataset.fid); return fl && deleteFile(fl); }
       case 'pickdue': { const b = $('#datePick'); if (b) b.hidden = !b.hidden; return; }
       case 'setdue': if (D) { D.due = el.dataset.v || null; D.dueTouched = true; D.askDue = false; if (D.fu && !D.fuAnswered && D.due && D.ask) { /* follow-up timing still asked separately */ } drawDraft(); } return;
       case 'cycleprio': if (D) { D.priority = D.priority === 'mid' ? 'hi' : D.priority === 'hi' ? 'lo' : 'mid'; D.prioTouched = true; drawDraft(); } return;
@@ -856,9 +1087,10 @@ document.addEventListener('submit', e => {
   }
 });
 document.addEventListener('input', e => {
+  if (e.target.id === 'libQ') { UI.lq = e.target.value.trim(); clearTimeout(UI.lqt); UI.lqt = setTimeout(() => { const pos = e.target.selectionStart; renderMain(); const i = $('#libQ'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch { } } }, 150); return; }
   if (e.target.id === 'taskQ') { UI.q = e.target.value.trim(); clearTimeout(UI.qt); UI.qt = setTimeout(() => { const pos = e.target.selectionStart; renderMain(); const i = $('#taskQ'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch { } } }, 150); }
 });
-document.addEventListener('change', e => { if (e.target.id === 'importFile' && e.target.files[0]) { importBackup(e.target.files[0]); e.target.value = ''; } });
+document.addEventListener('change', e => { if (e.target.id === 'libMonth') { UI.lmonth = e.target.value; return renderMain(); } if (e.target.id === 'importFile' && e.target.files[0]) { importBackup(e.target.files[0]); e.target.value = ''; } });
 document.addEventListener('keydown', e => {
   const tgt = e.target;
   if ((e.key === 'Enter' || e.key === ' ') && tgt.matches?.('[role="button"][data-open]')) { e.preventDefault(); openTask(tgt.dataset.open); return; }
@@ -872,6 +1104,11 @@ document.addEventListener('keydown', e => {
 /* ================= live updates ================= */
 onChange(why => {
   if (why === 'auth' || why === 'profile') return renderAll();
+  if (why === 'drive') {
+    if (state.drive.justLinked) { state.drive.justLinked = false; toast(t('driveLinked')); if (state.mode) return go('library'); }
+    if (state.mode) { renderMain(); UI.layers.forEach(Lr => Lr.rerender()); }
+    return;
+  }
   if (!state.mode) return;
   if (why === 'sync') { document.querySelectorAll('.nav-foot, .hdr-side').forEach(n => n.innerHTML = syncChip()); const sc = document.querySelector('.sync-card'); if (sc && UI.tab === 'more') renderMain(); return; }
   if (why === 'data') { if ($('#onbForm')) return; renderNav(); UI.keepScroll = true; renderMain(); UI.layers.forEach(Lr => Lr.rerender()); }
