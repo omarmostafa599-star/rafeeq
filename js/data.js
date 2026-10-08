@@ -179,6 +179,39 @@ export async function invokeRefine(payload) {
 }
 
 /** Chat understanding (Gemini). Times out so a stalled request never blocks the chat. */
+/* ---------- push notifications ---------- */
+export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const b64ToBytes = s => { const t = s.replace(/-/g, '+').replace(/_/g, '/'); const b = atob(t + '==='.slice((t.length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+export async function pushCurrent() {
+  if (!pushSupported()) return null;
+  const reg = await navigator.serviceWorker.getRegistration(); return reg ? reg.pushManager.getSubscription() : null;
+}
+/** Ask permission, subscribe this device and register it with the server. Returns 'ok' | 'denied' | 'unsupported' | 'error'. */
+export async function pushEnable() {
+  if (!pushSupported() || !sb || state.mode !== 'cloud') return 'unsupported';
+  const perm = await Notification.requestPermission(); if (perm !== 'granted') return 'denied';
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const { data } = await sb.functions.invoke('notify', { body: { op: 'vapid' } }); if (!data?.key) return 'error';
+    let sub = await reg.pushManager.getSubscription();
+    const want = b64ToBytes(data.key);
+    if (sub && sub.options?.applicationServerKey && new Uint8Array(sub.options.applicationServerKey).join() !== want.join()) { await sub.unsubscribe(); sub = null; }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want });
+    const j = sub.toJSON();
+    const { error } = await sb.rpc('save_push_sub', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_ua: navigator.userAgent.slice(0, 200) });
+    return error ? 'error' : 'ok';
+  } catch (e) { console.warn('push', e); return 'error'; }
+}
+export async function pushDisable() {
+  const sub = await pushCurrent(); if (!sub) return;
+  try { if (sb) await sb.rpc('delete_push_sub', { p_endpoint: sub.endpoint }); } catch { }
+  try { await sub.unsubscribe(); } catch { }
+}
+export async function pushTest() {
+  if (!sb) return null;
+  const { data, error } = await sb.functions.invoke('notify', { body: { op: 'test' } });
+  return error ? null : data;
+}
 export async function invokeAssist(payload, ms = 15000) {
   if (!sb || state.mode !== 'cloud') throw { code: 'local' };
   if (!navigator.onLine) throw { code: 'offline' };
@@ -215,12 +248,12 @@ async function pushProfile() {
 
 /* ---------- mutations ---------- */
 const COLS = {
-  tasks: ['id', 'kind', 'title', 'details', 'status', 'priority', 'role', 'due', 'project', 'source', 'waiting_on', 'waiting_what', 'notes', 'steps_done', 'steps_total', 'completed_on', 'result', 'archived', 'followups', 'log', 'ai', 'deleted', 'client_ts', 'created_at'],
+  tasks: ['id', 'kind', 'title', 'details', 'status', 'priority', 'role', 'due', 'due_time', 'remind_min', 'recur', 'project', 'source', 'waiting_on', 'waiting_what', 'notes', 'steps_done', 'steps_total', 'completed_on', 'result', 'archived', 'followups', 'log', 'ai', 'deleted', 'client_ts', 'created_at'],
   people: ['id', 'name', 'org', 'contact', 'notes', 'deleted', 'client_ts', 'created_at'],
   files: ['id', 'drive_id', 'name', 'mime', 'size', 'task_id', 'person_id', 'note', 'deleted', 'client_ts', 'created_at'],
 };
 export function newTask(fields = {}) {
-  return Object.assign({ id: uuid(), kind: 'task', title: '', details: '', status: 'todo', priority: 'mid', role: 'exec', due: null, project: '', source: '', waiting_on: null, waiting_what: 'reply', notes: '', steps_done: 0, steps_total: 0, completed_on: null, result: '', archived: false, followups: [], log: [], ai: {}, deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields);
+  return Object.assign({ id: uuid(), kind: 'task', title: '', details: '', status: 'todo', priority: 'mid', role: 'exec', due: null, due_time: null, remind_min: null, recur: null, project: '', source: '', waiting_on: null, waiting_what: 'reply', notes: '', steps_done: 0, steps_total: 0, completed_on: null, result: '', archived: false, followups: [], log: [], ai: {}, deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields);
 }
 export function newPerson(name) { return { id: uuid(), name: name.trim().replace(/\s+/g, ' '), org: '', contact: '', notes: '', deleted: false, client_ts: nowISO(), created_at: nowISO() }; }
 export function newFile(fields = {}) { return Object.assign({ id: uuid(), drive_id: '', name: '', mime: '', size: 0, task_id: null, person_id: null, note: '', deleted: false, client_ts: nowISO(), created_at: nowISO() }, fields); }

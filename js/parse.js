@@ -8,7 +8,15 @@ export const pd = s => { const [y, m, d] = s.split('-').map(Number); return new 
 export const today = () => ds(new Date());
 export const addDays = (s, n) => { const d = pd(s); d.setDate(d.getDate() + n); return ds(d); };
 export const diffDays = (a, b) => Math.round((pd(a) - pd(b)) / 86400000);
-export const isWeekend = s => { const w = pd(s).getDay(); return w === 5 || w === 6; }; // Fri, Sat (KSA)
+/* weekend days are a per-user setting (default Friday + Saturday) */
+let WK = [5, 6];
+export function setWeekend(days) { if (Array.isArray(days) && days.length && days.length <= 3 && days.every(d => Number.isInteger(d) && d >= 0 && d <= 6)) WK = [...new Set(days)].sort(); }
+export const weekendDays = () => WK.slice();
+/** First workday of the week (Sunday for Fri/Sat, Monday for Sat/Sun). */
+export const weekStartDay = () => { for (let i = 1; i <= 7; i++) { const d = (Math.max(...WK) + i) % 7; if (!WK.includes(d)) return d; } return 0; };
+/** Last workday of the week (Thursday for Fri/Sat, Friday for Sat/Sun). */
+export const weekEndDay = () => { for (let i = 1; i <= 7; i++) { const d = (Math.min(...WK) - i + 7) % 7; if (!WK.includes(d)) return d; } return 4; };
+export const isWeekend = s => WK.includes(pd(s).getDay());
 export function addWorkdays(s, n) { let d = s; const step = n < 0 ? -1 : 1; let left = Math.abs(n); while (left > 0) { d = addDays(d, step); if (!isWeekend(d)) left--; } return d; }
 export function nextWeekday(from, w) { let d = addDays(from, 1); while (pd(d).getDay() !== w) d = addDays(d, 1); return d; }
 export const lastOfMonth = s => { const d = pd(s); return ds(new Date(d.getFullYear(), d.getMonth() + 1, 0)); };
@@ -71,8 +79,8 @@ function dueFrom(n, td) {
   if (/بعد\s+(اسبوعين)/.test(n)) return addDays(td, 14);
   if (/بعد\s+(اسبوع)|in a week|next week/.test(n) && !/الاسبوع\s+(الجاي|القادم)/.test(n)) return addDays(td, 7);
   if (/(اخر|نهايه)\s+الشهر|end of (the )?month/.test(n)) return lastOfMonth(td);
-  if (/(اخر|نهايه)\s+الاسبوع|end of (the )?week/.test(n)) return nextWeekday(td, 4);
-  if (/الاسبوع\s+(الجاي|القادم|اللي\s+جاي)/.test(n)) return nextWeekday(td, 0);
+  if (/(اخر|نهايه)\s+الاسبوع|end of (the )?week/.test(n)) return pd(td).getDay() === weekEndDay() ? td : nextWeekday(td, weekEndDay());
+  if (/الاسبوع\s+(الجاي|القادم|اللي\s+جاي)/.test(n)) return nextWeekday(td, weekStartDay());
   for (let i = 0; i < WEEKDAYS.length; i++) for (const w of WEEKDAYS[i]) if (new RegExp('(^|[^\\p{L}])(يوم\\s+)?' + w + '([^\\p{L}]|$)', 'u').test(n)) return nextWeekday(td, i);
   m = n.match(/(^|[^\d])(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?(?!\d)/);
   if (m) { let y = m[4] ? +m[4] : +td.slice(0, 4); if (y < 100) y += 2000; const v = validDate(`${y}-${pad(+m[3])}-${pad(+m[2])}`); if (v) return (!m[4] && v < td) ? validDate(`${y + 1}-${pad(+m[3])}-${pad(+m[2])}`) : v; }
@@ -203,11 +211,14 @@ export function parseCapture(text, people, td = today()) {
   }
   const src0 = sourceFrom(raw);
   if (src0?.span) base = base.replace(src0.span, ' ');
+  const tm = timeFrom(raw), rc = recurFrom(raw, due || td);
+  if (tm?.span) base = base.replace(tm.span, ' ');
+  if (rc?.span) base = base.replace(rc.span, ' ');
   base = base.replace(/\s*(?:من نفسي|مبادرة مني|مبادره مني|تكليف ذاتي)\s*/g, ' ').trim();
   let s = base.replace(FILLER, '').replace(/\s*(?:و\s*)?(?:مستني|منتظر|بانتظار|في انتظار)\s+.*$/, '');
   const primaryFu = /^(أتابع|اتابع|أكلم|اكلم|أسأل|اسأل|اسال|أتصل|اتصل|أذكّر|اذكر|أبلغ|ابلغ)/.test(s);
   if (!primaryFu) s = s.split(FU_SPLIT)[0];
-  s = s.replace(DATE_RE, ' ').replace(PRIO_RE, ' ');
+  s = s.replace(DATE_RE, ' ').replace(PRIO_RE, ' ').replace(/\s+/g, ' ').trim();
   for (const [re, rep] of VERBS) { if (re.test(s)) { s = s.replace(re, rep); break; } }
   s = clean(s.replace(/\s+و$/, ''));
   if (!s) s = raw;
@@ -230,7 +241,8 @@ export function parseCapture(text, people, td = today()) {
     fu = { what: what || '', due: fdue };
     ask = !fdue;
   }
-  return { title: s.slice(0, 300), due, dueWeekend: !!(due && isWeekend(due)), priority, person, more: person ? more.slice(0, 5) : [], fu, waiting, ask, source };
+  const due2 = rc ? (due && rc.recur.f !== 'weekly' ? due : recurNext(rc.recur, addDays(td, -1))) : due;
+  return { title: s.slice(0, 300), due: due2, dueWeekend: !!(due2 && isWeekend(due2)), priority, person, more: person ? more.slice(0, 5) : [], fu, waiting, ask, source, time: tm?.time || null, recur: rc?.recur || null };
 }
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -290,4 +302,73 @@ function logTitle(words) {
   while (w.length && /^(ب?يوم|ال(احد|اتنين|اثنين|تلات|ثلاثاء|اربع|اربعاء|خميس|جمعه|سبت)|اللي|فات)$/.test(normAr(w[w.length - 1]))) w.pop();
   const s = w.join(' ').replace(/\s+/g, ' ').trim();
   return s.length > 2 ? s.slice(0, 300) : '';
+}
+
+/* ---------- time of day: "الساعة 10" · "10:30" · "3 العصر" · "at 3pm" ---------- */
+const T_AM = /^(الصبح|صباحا|صباحًا|الصباح|صباحاً|am|a\.m\.?)$/i, T_PM = /^(العصر|بعد الضهر|بعد الظهر|الضهر|الظهر|المغرب|العشا|العشاء|مساء|مساءً|مساءا|بالليل|الليل|pm|p\.m\.?)$/i;
+const TIME_RE = /(?:(?:ال)?ساع[ةه]\s*|at\s+)?(\d{1,2})(?:[:٫](\d{2}))?\s*(و\s*نص|و\s*ربع|[إا]لا\s*ربع)?\s*(الصبح|صباحًا|صباحاً|صباحا|الصباح|العصر|بعد الضهر|بعد الظهر|الضهر|الظهر|المغرب|العشاء|العشا|مساءً|مساءا|مساء|بالليل|الليل|a\.?m\.?|p\.?m\.?)?(?=[\s،,.]|$)/gi;
+export function timeFrom(raw) {
+  const text = String(raw || '').replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+  for (const m of text.matchAll(TIME_RE)) {
+    const prefixed = /^(?:(?:ال)?ساع|at\s)/i.test(m[0].trim()), colon = m[2] != null, q = m[4];
+    if (!prefixed && !colon && !q) continue;
+    let h = +m[1], mi = m[2] != null ? +m[2] : 0;
+    if (h > 23 || mi > 59) continue;
+    if (m[3]) { if (/نص/.test(m[3])) mi = 30; else if (/لا/.test(m[3])) { mi = 45; h = h - 1; } else mi = 15; }
+    if (h <= 12) {
+      if (q && T_AM.test(q.replace(/\s+/g, ' '))) { if (h === 12) h = 0; }
+      else if (q && T_PM.test(q.replace(/\s+/g, ' '))) { if (h < 12) h += 12; }
+      else if (h >= 1 && h <= 6) h += 12;
+    }
+    if (h < 0) h += 24;
+    return { time: `${pad(h)}:${pad(mi)}`, span: m[0].trim() };
+  }
+  return null;
+}
+
+/* ---------- recurrence: "كل أحد" · "كل يوم" · "كل شهر يوم 25" · "آخر كل شهر" · "كل 3 شهور" ---------- */
+const DAY_RAW = [['الأحد', 'الاحد', 'احد', 'أحد', 'حد', 'sunday'], ['الاثنين', 'الإثنين', 'الاتنين', 'اتنين', 'اثنين', 'إثنين', 'monday'], ['الثلاثاء', 'التلات', 'التلاتاء', 'تلات', 'ثلاثاء', 'tuesday'], ['الأربعاء', 'الاربعاء', 'الاربع', 'اربع', 'أربع', 'أربعاء', 'اربعاء', 'wednesday'], ['الخميس', 'خميس', 'thursday'], ['الجمعة', 'الجمعه', 'جمعة', 'جمعه', 'friday'], ['السبت', 'سبت', 'saturday']];
+const DAY_ALT = DAY_RAW.flat().sort((a, b) => b.length - a.length).join('|');
+const dayIdx = w => { const n = normAr(w); return DAY_RAW.findIndex(v => v.some(x => normAr(x) === n)); };
+export function recurFrom(raw, base = today()) {
+  const t = String(raw || '').replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+  let m = t.match(new RegExp(`(?:كل|every)\\s+(?:يوم\\s+)?((?:${DAY_ALT})(?:\\s*(?:و|،|,|and)\\s*(?:يوم\\s+)?(?:${DAY_ALT}))*)`, 'i'));
+  if (m) { const days = [...m[1].matchAll(new RegExp(DAY_ALT, 'gi'))].map(x => dayIdx(x[0])).filter(i => i >= 0); if (days.length) return { recur: { f: 'weekly', days: [...new Set(days)].sort() }, span: m[0] }; }
+  m = t.match(/(?:في\s+)?(?:آخر|اخر|نهاية|نهايه)\s+كل\s+شهر|كل\s+(?:آخر|اخر)\s+شهر|end of every month|last (?:work)?day of (?:every|each) month/i);
+  if (m) return { recur: { f: 'monthly', dom: 'last' }, span: m[0] };
+  m = t.match(/كل\s+(?:3|تلات|ثلاث|ثلاثة|تلاتة|تلاته|ثلاثه)\s+(?:شهور|أشهر|اشهر)|ربع\s+سنوي(?:ًا|ا)?|كل\s+ربع(?:\s+سن[ةه])?|quarterly|every quarter/i);
+  if (m) { const d = t.match(/يوم\s+(\d{1,2})(?!\d)/); return { recur: { f: 'quarterly', dom: d ? Math.min(31, +d[1]) : pd(base).getDate() }, span: m[0] }; }
+  m = t.match(/كل\s+شهر\s+(?:يوم|في)?\s*(\d{1,2})(?!\d)|(?:يوم|في)\s+(\d{1,2})\s+(?:من\s+)?كل\s+شهر|every month on (?:the )?(\d{1,2})/i);
+  if (m) return { recur: { f: 'monthly', dom: Math.max(1, Math.min(31, +(m[1] || m[2] || m[3]))) }, span: m[0] };
+  m = t.match(/كل\s+شهر|شهري(?:ًا|ا|اً)|monthly|every month/i);
+  if (m) return { recur: { f: 'monthly', dom: pd(base).getDate() }, span: m[0] };
+  m = t.match(/كل\s+(?:أسبوع|اسبوع)|أسبوعي(?:ًا|ا|اً)|اسبوعي(?:ًا|ا|اً)|weekly|every week/i);
+  if (m) return { recur: { f: 'weekly', days: [pd(base).getDay()] }, span: m[0] };
+  m = t.match(/كل\s+يوم(?:\s+عمل)?|يومي(?:ًا|ا|اً)|every\s+(?:work\s*)?day|daily/i);
+  if (m) return { recur: { f: 'daily' }, span: m[0] };
+  return null;
+}
+const shiftWork = d => { let x = d; for (let i = 0; i < 7 && isWeekend(x); i++) x = addDays(x, 1); return x; };
+const lastWorkdayOf = (y, m) => { let d = ds(new Date(y, m + 1, 0)); for (let i = 0; i < 7 && isWeekend(d); i++) d = addDays(d, -1); return d; };
+const monthDay = (y, m, dom) => dom === 'last' ? lastWorkdayOf(y, m) : shiftWork(ds(new Date(y, m, Math.min(+dom || 1, new Date(y, m + 1, 0).getDate()))));
+/** Next occurrence strictly after `from`. Weekend dates move forward to the next workday. */
+export function recurNext(r, from) {
+  if (!r || !validDate(from)) return null;
+  if (r.f === 'daily') return addWorkdays(from, 1);
+  if (r.f === 'weekly') {
+    const days = Array.isArray(r.days) && r.days.length ? r.days : [pd(from).getDay()];
+    let d = addDays(from, 1); for (let i = 0; i < 7; i++) { if (days.includes(pd(d).getDay())) return shiftWork(d); d = addDays(d, 1); } return null;
+  }
+  const step = r.f === 'quarterly' ? 3 : 1, f = pd(from);
+  for (let k = 0; k <= 36; k += step) { const c = monthDay(f.getFullYear(), f.getMonth() + k, r.dom ?? f.getDate()); if (c > from) return c; }
+  return null;
+}
+/** Normalise a recurrence object (from the AI or the form). */
+export function cleanRecur(r) {
+  if (!r || typeof r !== 'object') return null;
+  const f = ['daily', 'weekly', 'monthly', 'quarterly'].includes(r.f || r.freq) ? (r.f || r.freq) : null; if (!f) return null;
+  if (f === 'daily') return { f };
+  if (f === 'weekly') { const days = (Array.isArray(r.days) ? r.days : []).map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6); return { f, days: days.length ? [...new Set(days)].sort() : [] }; }
+  const dom = r.dom === 'last' || r.last ? 'last' : Math.max(1, Math.min(31, parseInt(r.dom, 10) || 1));
+  return { f, dom };
 }
