@@ -23,9 +23,10 @@ export const lastOfMonth = s => { const d = pd(s); return ds(new Date(d.getFullY
 export function validDate(v) { if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null; const d = pd(v); return isNaN(d) || ds(d) !== v ? null : v; }
 
 /* ---------- names ---------- */
-const MARKS = /[ً-ٰٟـ]/g;
-export const normAr = s => String(s || '').normalize('NFKC').replace(MARKS, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
-  .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).toLowerCase();
+const MARKS = /[ً-ٰٟـ\u200B-\u200F]/g;
+/** Arabic-Indic (٠-٩) and Persian (۰-۹) digits → ASCII; same length, so text spans stay valid. */
+export const asciiDigits = s => String(s || '').replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+export const normAr = s => asciiDigits(String(s || '').normalize('NFKC').replace(MARKS, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')).toLowerCase();
 const TITLES = new Set(['م', 'د', 'ا', 'مهندس', 'المهندس', 'دكتور', 'الدكتور', 'استاذ', 'الاستاذ', 'مدام', 'الحاج', 'الشيخ', 'eng', 'dr', 'mr', 'mrs', 'ms']);
 export const nameTokens = s => (normAr(s).match(/[\p{L}\p{N}]+/gu) || []).filter(x => !TITLES.has(x));
 
@@ -41,6 +42,7 @@ export function aliasMap(people) {
   return map;
 }
 /** Known people found in free text → [{s, e, ids}] spans on the original string. */
+const PREP_RAW = /^(على|عل[ىي]ه|عليها|عليهم|عليك|عليكم)$/;
 export function findPeople(text, people) {
   const map = aliasMap(people); if (!map.size) return [];
   const toks = []; const re = /[\p{L}\p{M}\p{N}]+/gu; let m;
@@ -52,7 +54,8 @@ export function findPeople(text, people) {
       if (i + L > toks.length) continue;
       const seq = toks.slice(i, i + L).map(x => x.n);
       const tries = [{ seq, off: 0 }];
-      if (/^[وفبلك]/.test(seq[0]) && seq[0].length > 3) tries.push({ seq: [seq[0].slice(1), ...seq.slice(1)], off: 1 });
+      if (L === 1 && PREP_RAW.test(toks[i].raw)) continue; // «على/عليه» normalise to the name «علي»
+      if (/^[وفبلك]/.test(seq[0]) && seq[0].length > (L === 1 ? 4 : 3)) tries.push({ seq: [seq[0].slice(1), ...seq.slice(1)], off: 1 });
       for (const tr of tries) { const ids = map.get(tr.seq.join(' ')); if (ids) { hit = { L, ids: [...ids], s: toks[i].s + tr.off, e: toks[i + L - 1].e }; break; } }
     }
     if (hit) { hits.push(hit); i += hit.L; } else i++;
@@ -63,26 +66,31 @@ export function findPeople(text, people) {
 /* ---------- vocabulary ---------- */
 const STOP = new Set(['عشان', 'علشان', 'بخصوص', 'عن', 'على', 'في', 'من', 'مع', 'الى', 'الي', 'قبل', 'بعد', 'بكره', 'بكرا', 'غدا', 'اليوم', 'النهارده', 'الاحد', 'الاثنين', 'الاتنين', 'الثلاثاء', 'التلات', 'الاربعاء', 'الخميس', 'الجمعه', 'السبت', 'و', 'لما', 'يرد', 'يبعت', 'يعتمد', 'يرسل', 'يوافق', 'ضروري', 'عاجل', 'الاسبوع', 'الجاي', 'القادم', 'اخر', 'الشهر', 'رد', 'اعتماد', 'موافقه', 'قرار', 'حول', 'لأجل', 'لاجل', 'about', 'regarding', 'to', 'for', 'tomorrow', 'today']);
 // normalized stop-words (built once); «على» the preposition is checked on the raw word because it normalizes to the name «علي»
-const STOPN = new Set([...STOP, 'بعدين', 'بعدها', 'كمان', 'برضه', 'برضو', 'ثم', 'اني', 'ان', 'انه', 'لو', 'اذا', 'يعني', 'خلال', 'حتى', 'لحد', 'and', 'then'].map(x => normAr(x)).filter(x => x !== 'علي'));
+const STOPN = new Set([...STOP, 'بعدين', 'بعدها', 'كمان', 'برضه', 'برضو', 'ثم', 'اني', 'ان', 'انه', 'لو', 'اذا', 'يعني', 'خلال', 'حتى', 'لحد', 'غير', 'اول', 'فضلك', 'هنا', 'هناك', 'بعض', 'جديد', 'كل', 'نفس', 'and', 'then', 'the', 'a', 'an', 'my', 'our', 'no', 'all'].map(x => normAr(x)).filter(x => x !== 'علي'));
 const VERBISH = /^(?:أ|ا)(?:راجع|تابع|كلم|كلّم|رسل|بعت|جهز|جهّز|عمل|زور|طلب|دقق|فحص|سلم|سلّم|حدث|حدّث|كتب|طبع|خلص|خلّص|نهي|رفع|سأل|سال|تصل|بلغ|ذكر|حضر|حضّر|عد|جهّز)/;
 const isStop = w => STOPN.has(normAr(w)) || /^(على|عل[ىي]ه|عليها|نفسي)$/.test(w) || VERBISH.test(w);
-const WEEKDAYS = [['الاحد', 'الحد', 'sunday'], ['الاثنين', 'الاتنين', 'monday'], ['الثلاثاء', 'التلات', 'الثلاث', 'tuesday'], ['الاربعاء', 'الاربع', 'wednesday'], ['الخميس', 'thursday'], ['الجمعه', 'friday'], ['السبت', 'saturday']];
+const WEEKDAYS = [['الاحد', 'sunday'], ['الاثنين', 'الاتنين', 'monday'], ['الثلاثاء', 'التلات', 'tuesday'], ['الاربعاء', 'الاربع', 'wednesday'], ['الخميس', 'thursday'], ['الجمعه', 'friday'], ['السبت', 'saturday']];
 const FU_VERB = /(^|\s)(و?اتابع|متابعه|و?اكلم|و?اتصل|و?اسال|و?اذكر|و?اراسل|و?ابلغ|و?ارجع ل|follow\s*up|call|ask|remind|ping)(\s|$)/;
 const WAIT_VERB = /(مستني|منتظر|بانتظار|في انتظار|waiting)/;
 
+const WB = (w) => new RegExp('(^|[^\\p{L}])(?:' + w + ')([^\\p{L}]|$)', 'u');
+const RE_TODAY = WB('النهارده|اليوم|today'), RE_TOMORROW = WB('بكر[هةا]|غدا|tomorrow'), RE_AFTER_TOMORROW = /بعد\s*بكر[هةا]|بعد\s*غد|day after tomorrow/;
 function dueFrom(n, td) {
-  if (/(بعد\s*بكر[هةا]|بعد\s*غد|day after tomorrow)/.test(n)) return addDays(td, 2);
-  if (/(النهارده|النهارده|اليوم|today)/.test(n)) return td;
-  if (/(بكر[هةا]|غدا|tomorrow)/.test(n)) return addDays(td, 1);
+  if (RE_AFTER_TOMORROW.test(n)) return addDays(td, 2);
+  if (RE_TODAY.test(n)) return td;
+  if (RE_TOMORROW.test(n)) return addDays(td, 1);
   let m = n.match(/بعد\s+(\d+)\s*(يوم|ايام)|in\s+(\d+)\s+days?/); if (m) return addDays(td, +(m[1] || m[3]));
   if (/بعد\s+يومين/.test(n)) return addDays(td, 2);
   if (/بعد\s+(اسبوعين)/.test(n)) return addDays(td, 14);
-  if (/بعد\s+(اسبوع)|in a week|next week/.test(n) && !/الاسبوع\s+(الجاي|القادم)/.test(n)) return addDays(td, 7);
-  if (/(اخر|نهايه)\s+الشهر|end of (the )?month/.test(n)) return lastOfMonth(td);
+  if (/بعد\s+(اسبوع)|in a week/.test(n) && !/الاسبوع\s+(الجاي|القادم)/.test(n)) return addDays(td, 7);
+  if (/(اخر|نهايه)\s+(?:يوم\s+)?(?:في\s+|من\s+)?الشهر|end of (the )?month/.test(n)) return lastOfMonth(td);
   if (/(اخر|نهايه)\s+الاسبوع|end of (the )?week/.test(n)) return pd(td).getDay() === weekEndDay() ? td : nextWeekday(td, weekEndDay());
-  if (/الاسبوع\s+(الجاي|القادم|اللي\s+جاي)/.test(n)) return nextWeekday(td, weekStartDay());
-  for (let i = 0; i < WEEKDAYS.length; i++) for (const w of WEEKDAYS[i]) if (new RegExp('(^|[^\\p{L}])(يوم\\s+)?' + w + '([^\\p{L}]|$)', 'u').test(n)) return nextWeekday(td, i);
-  m = n.match(/(^|[^\d])(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?(?!\d)/);
+  const nextWeek = /الاسبوع\s+(الجاي|القادم|اللي\s+جاي)|next week/.test(n);
+  let wd = -1;
+  for (let i = 0; i < WEEKDAYS.length && wd < 0; i++) for (const w of WEEKDAYS[i]) if (new RegExp('(^|[^\\p{L}])(يوم\\s+)?' + w + '([^\\p{L}]|$)', 'u').test(n)) { wd = i; break; }
+  if (nextWeek) { const start = nextWeekday(td, weekStartDay()); if (wd < 0) return start; let d = start; for (let i = 0; i < 7 && pd(d).getDay() !== wd; i++) d = addDays(d, 1); return d; }
+  if (wd >= 0) return nextWeekday(td, wd);
+  m = n.match(/(^|[^\d])(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?(?!\d)/) || n.match(/(^|[^\d])(\d{1,2})-(\d{1,2})-(\d{2,4})(?!\d)/);
   if (m) { let y = m[4] ? +m[4] : +td.slice(0, 4); if (y < 100) y += 2000; const v = validDate(`${y}-${pad(+m[3])}-${pad(+m[2])}`); if (v) return (!m[4] && v < td) ? validDate(`${y + 1}-${pad(+m[3])}-${pad(+m[2])}`) : v; }
   return null;
 }
@@ -96,8 +104,8 @@ const VERBS = [
   [/^(أحدث|احدث|أحدّث)\s+/, 'تحديث '], [/^(أكتب|اكتب)\s+/, 'كتابة '], [/^(أحضر|احضر)\s+(اجتماع|الاجتماع)/, 'حضور $2'], [/^(أطبع|اطبع)\s+/, 'طباعة '],
 ];
 const DATE_WORDS = '(?:النهارده|النهاردة|اليوم|بكرة|بكره|بكرا|غدًا|غدا|بعد بكرة|بعد بكره|بعد غد|الأحد|الاحد|الاثنين|الإثنين|الاتنين|الثلاثاء|التلات|الأربعاء|الاربعاء|الخميس|الجمعة|السبت|الأسبوع الجاي|الاسبوع الجاي|الأسبوع القادم|آخر الشهر|اخر الشهر|آخر الأسبوع|اخر الاسبوع|بعد أسبوع|بعد اسبوع|بعد يومين|today|tomorrow|next week)';
-const DATE_RE = new RegExp('\\s*(?:قبل|يوم|في|بحلول|by|on)?\\s*' + DATE_WORDS + '(?=\\s|$|[،,.])', 'g');
-const PRIO_RE = /\s*(عاجل(?:ة)?(?:\s+جد(?:ًا|ا|اً))?|ضروري(?:\s+جد(?:ًا|ا|اً))?|مهم(?:ة)?\s+جد(?:ًا|ا|اً)|urgent|asap)(?=\s|$|[،,.])/g;
+const DATE_RE = new RegExp('(^|[^\\p{L}])(?:(?:قبل|يوم|في|بحلول|by|on)\\s+)?' + DATE_WORDS + '(?=\\s|$|[،,.])', 'gu');
+const PRIO_RE = /\s*(?:(?:مش|غير|مو)\s+)?(عاجل(?:ة)?(?:\s+جد(?:ًا|ا|اً))?|ضروري(?:ة)?(?:\s+جد(?:ًا|ا|اً))?|مستعجل(?:ة)?|مهم(?:ة)?\s+جد(?:ًا|ا|اً)|urgent|asap|not urgent|low priority)(?=\s|$|[،,.])/g;
 const FU_SPLIT = /\s+و\s*(?=أتابع|اتابع|أكلم|اكلم|أسأل|اسأل|اسال|أتصل|اتصل|أذكّر|اذكر|أبلغ|ابلغ)/;
 const WHY_RE = /(?:عشان|علشان|بخصوص|لأجل|لاجل|حول|عن موضوع|عن|about|regarding)\s+(.+)$/;
 const WHAT_MAP = [[/^(يبعت|يرسل|يبعتلي|يرسلي|تبعت|ترسل|تبعتلي)\s*/, 'إرسال '], [/^(يرد|يردّ|ترد|تردّ)\s*(علي|عليّ)?\s*/, 'الرد '], [/^(يعتمد|تعتمد)\s*/, 'اعتماد '], [/^(يوافق|توافق)\s*(على)?\s*/, 'الموافقة على '], [/^(يسلم|يسلّم|تسلم|تسلّم)\s*/, 'تسليم '], [/^(يراجع|تراجع)\s*/, 'مراجعة '], [/^(يجهز|يجهّز|تجهز|تجهّز)\s*/, 'تجهيز ']];
@@ -120,7 +128,7 @@ function descName(words) {
 }
 function newNameCandidate(text, knownSpans) {
   // "مع خالد"، "من م. سارة"، "لفهد" → a name not yet registered
-  const re = /(?:^|\s)(?:(?:مع|من|عند|with|from)\s+|لـ\s*|و?(?:أكلم|اكلم|أكلّم|أسأل|اسأل|اسال|أبلغ|ابلغ|أراسل|اراسل|أذكّر|اذكر|أتصل ب|اتصل ب|أتصل على|اتصل على)\s+)((?:(?:م|د|أ|ا)\.\s*)?[\p{L}]{2,}(?:\s+[\p{L}]{2,})?)/gu;
+  const re = /(?:^|\s)(?:(?:مع|من|عند|with|from)\s+|لـ\s*|و?(?:أتصل|اتصل)\s+ب(?=[\p{L}])|و?(?:أكلم|اكلم|أكلّم|أسأل|اسأل|اسال|أبلغ|ابلغ|أراسل|اراسل|أذكّر|اذكر|أتصل ب|اتصل ب|أتصل على|اتصل على)\s+)((?:(?:م|د|أ|ا)\.\s*)?[\p{L}]{2,}(?:\s+[\p{L}]{2,})?)/gu;
   let m;
   const roleRe = /(?:^|\s)(?:مع|من|عند|لـ?|with|from)\s*((?:ال)?(?:رئيس|مدير|مديرة|مشرف|مشرفة|مسؤول|مسئول|منسق|منسقة|أخصائي|اخصائي|موظف|مندوب|نائب|محاسب|أمين|امين)(?:\s+[\p{L}]+){0,6})/gu;
   let rm;
@@ -166,7 +174,7 @@ function andNames(text, from, knownSpans) {
   for (let guard = 0; guard < 6; guard++) {
     const m = rest.match(re); if (!m) break;
     const words = m[1].split(/\s+/); const keep = [];
-    for (const w of words) { if (isStop(w) || (keep.length && /^و[\p{L}]{3,}/u.test(w))) break; keep.push(w); if (!/^(?:م|د|أ|ا)\.$/.test(w) && keep.length >= 2) break; }
+    for (const w of words) { if (isStop(w) || (!keep.length && /^ال/.test(normAr(w)) && !/^(?:م|د|أ|ا)\./.test(w)) || (keep.length && /^و/.test(w))) break; keep.push(w); if (!/^(?:م|د|أ|ا)\.$/.test(w) && keep.length >= 2) break; }
     const name = clean(keep.join(' '));
     const at = text.length - rest.length + m[0].indexOf(m[1]);
     if (!name || isStop(name) || /^(?:أ|ا)[\p{L}]+(?:ه|ها|هم)$/u.test(name) || knownSpans.some(h => at < h.e && at + name.length > h.s)) break;
@@ -181,10 +189,10 @@ function andNames(text, from, knownSpans) {
  *           fu:{what, due}|null, waiting:{what}|null, ask:bool }
  */
 export function parseCapture(text, people, td = today()) {
-  const raw = String(text || '').trim();
+  const raw = asciiDigits(String(text || '').trim());
   const n = ' ' + normAr(raw) + ' ';
   const due = dueFrom(n, td);
-  const priority = /(عاجل|ضروري|مهم\s+جدا|urgent|asap)/.test(n) ? 'hi' : /(مش\s+مستعجل|غير\s+مستعجل|لما\s+افضي|مش\s+ضروري|low priority)/.test(n) ? 'lo' : 'mid';
+  const priority = /((مش|غير|مو)\s+(مستعجل|عاجل|ضروري)|لما\s+افضي|low priority|not urgent)/.test(n) ? 'lo' : /(عاجل|ضروري|مهم\s+جدا|urgent|asap)/.test(n) ? 'hi' : 'mid';
 
   const hits = findPeople(raw, people);
   const refOf = h => h.ids.length === 1 ? { kind: 'known', id: h.ids[0] } : { kind: 'amb', ids: h.ids, label: raw.slice(h.s, h.e) };
@@ -218,7 +226,7 @@ export function parseCapture(text, people, td = today()) {
   let s = base.replace(FILLER, '').replace(/\s*(?:و\s*)?(?:مستني|منتظر|بانتظار|في انتظار)\s+.*$/, '');
   const primaryFu = /^(أتابع|اتابع|أكلم|اكلم|أسأل|اسأل|اسال|أتصل|اتصل|أذكّر|اذكر|أبلغ|ابلغ)/.test(s);
   if (!primaryFu) s = s.split(FU_SPLIT)[0];
-  s = s.replace(DATE_RE, ' ').replace(PRIO_RE, ' ').replace(/\s+/g, ' ').trim();
+  s = s.replace(DATE_RE, '$1 ').replace(PRIO_RE, ' ').replace(/\s+/g, ' ').trim();
   for (const [re, rep] of VERBS) { if (re.test(s)) { s = s.replace(re, rep); break; } }
   s = clean(s.replace(/\s+و$/, ''));
   if (!s) s = raw;
@@ -226,7 +234,7 @@ export function parseCapture(text, people, td = today()) {
   // What we need from the person
   let what = '';
   const w = raw.match(WHY_RE);
-  if (w) { what = clean(w[1].replace(DATE_RE, ' ').replace(PRIO_RE, ' ')); for (const [re, rep] of WHAT_MAP) if (re.test(what)) { what = clean(what.replace(re, rep)); break; } }
+  if (w) { what = clean(w[1].replace(DATE_RE, '$1 ').replace(PRIO_RE, ' ')); for (const [re, rep] of WHAT_MAP) if (re.test(what)) { what = clean(what.replace(re, rep)); break; } }
 
   let fu = null, waiting = null, ask = false;
   if (person && waitVerb) {
@@ -274,7 +282,7 @@ export function logDate(text, td = today()) {
   if (/\sاول (امبارح|امس)\s/.test(n)) return addDays(td, -2);
   if (/\s(امبارح|امس|البارحه|yesterday)\s/.test(n)) return addDays(td, -1);
   const days = [['الاحد', 0], ['الاتنين', 1], ['الاثنين', 1], ['التلات', 2], ['الثلاثاء', 2], ['الاربع', 3], ['الاربعاء', 3], ['الخميس', 4], ['الجمعه', 5], ['السبت', 6]];
-  for (const [nm, w] of days) if (n.includes(' ' + nm) || n.includes(' يوم ' + nm)) { let d = td; if (/(اللي فات|الماضي|last)/.test(n) || pd(d).getDay() === w) d = addDays(d, -1); while (pd(d).getDay() !== w) d = addDays(d, -1); return d; }
+  for (const [nm, w] of days) if (n.includes(' ' + nm) || n.includes(' يوم ' + nm)) { let d = td; if (/(اللي فات|الماضي|last)/.test(n)) d = addDays(d, -1); while (pd(d).getDay() !== w) d = addDays(d, -1); return d; }
   return td;
 }
 /** "النهارده زرت معرض الملقا وفحصت شحنة العود" → [{title:'زيارة معرض الملقا'}, {title:'فحص شحنة العود'}] */
@@ -285,7 +293,7 @@ export function splitLogs(text) {
     for (const part of piece.split(/\s*[،,؛;]\s*/)) {
       const words = part.trim().split(/\s+/).filter(Boolean); let cur = [];
       const flush = () => { const t = logTitle(cur); if (t) out.push({ title: t }); cur = []; };
-      words.forEach((w, i) => { if (i > 0 && pastVerb(w) && cur.some(x => !LOG_FILL.has(normAr(x)))) flush(); cur.push(w); });
+      words.forEach((w, i) => { if (i > 0 && pastVerb(w) && !/^(اللي|التي|الذي|لما|ما|بعدما|قبلما)$/.test(normAr(words[i - 1])) && cur.some(x => !LOG_FILL.has(normAr(x)))) flush(); cur.push(w); });
       flush();
     }
   }
@@ -306,20 +314,23 @@ function logTitle(words) {
 
 /* ---------- time of day: "الساعة 10" · "10:30" · "3 العصر" · "at 3pm" ---------- */
 const T_AM = /^(الصبح|صباحا|صباحًا|الصباح|صباحاً|am|a\.m\.?)$/i, T_PM = /^(العصر|بعد الضهر|بعد الظهر|الضهر|الظهر|المغرب|العشا|العشاء|مساء|مساءً|مساءا|بالليل|الليل|pm|p\.m\.?)$/i;
-const TIME_RE = /(?:(?:ال)?ساع[ةه]\s*|at\s+)?(\d{1,2})(?:[:٫](\d{2}))?\s*(و\s*نص|و\s*ربع|[إا]لا\s*ربع)?\s*(الصبح|صباحًا|صباحاً|صباحا|الصباح|العصر|بعد الضهر|بعد الظهر|الضهر|الظهر|المغرب|العشاء|العشا|مساءً|مساءا|مساء|بالليل|الليل|a\.?m\.?|p\.?m\.?)?(?=[\s،,.]|$)/gi;
+const TIME_RE = /(?:(?:ال)?ساع[ةه]\s*|at\s+)?(\d{1,2})(?:([:٫.])(\d{2}))?\s*(و\s*نص|و\s*ربع|[إا]لا\s*ربع)?\s*(الصبح|صباحًا|صباحاً|صباحا|الصباح|العصر|بعد الضهر|بعد الظهر|الضهر|الظهر|المغرب|العشاء|العشا|مساءً|مساءا|مساء|بالليل|الليل|a\.?m\.?|p\.?m\.?)?(?=[\s،,.]|$)/gi;
 export function timeFrom(raw) {
-  const text = String(raw || '').replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+  const text = asciiDigits(raw);
   for (const m of text.matchAll(TIME_RE)) {
-    const prefixed = /^(?:(?:ال)?ساع|at\s)/i.test(m[0].trim()), colon = m[2] != null, q = m[4];
+    const prefixed = /^(?:(?:ال)?ساع|at\s)/i.test(m[0].trim()), q = m[5];
+    const colon = m[3] != null && (m[2] !== '.' || prefixed || !!q); // «10.30» only counts as a time next to «الساعة» or a qualifier (else it may be a date)
     if (!prefixed && !colon && !q) continue;
-    let h = +m[1], mi = m[2] != null ? +m[2] : 0;
+    let h = +m[1], mi = colon ? +m[3] : 0;
     if (h > 23 || mi > 59) continue;
-    if (m[3]) { if (/نص/.test(m[3])) mi = 30; else if (/لا/.test(m[3])) { mi = 45; h = h - 1; } else mi = 15; }
+    const qn = q ? q.replace(/\s+/g, ' ') : '';
+    if (m[4]) { if (/نص/.test(m[4])) mi = 30; else if (/لا/.test(m[4])) mi = 45; else mi = 15; }
     if (h <= 12) {
-      if (q && T_AM.test(q.replace(/\s+/g, ' '))) { if (h === 12) h = 0; }
-      else if (q && T_PM.test(q.replace(/\s+/g, ' '))) { if (h < 12) h += 12; }
+      if (qn && T_AM.test(qn)) { if (h === 12) h = 0; }
+      else if (qn && T_PM.test(qn)) { if (h === 12 && /ليل/.test(qn)) h = 0; else if (h < 12) h += 12; }
       else if (h >= 1 && h <= 6) h += 12;
     }
+    if (m[4] && /لا/.test(m[4])) h -= 1; // «إلا ربع» after the AM/PM mapping: «1 إلا ربع» = 12:45
     if (h < 0) h += 24;
     return { time: `${pad(h)}:${pad(mi)}`, span: m[0].trim() };
   }
@@ -327,23 +338,24 @@ export function timeFrom(raw) {
 }
 
 /* ---------- recurrence: "كل أحد" · "كل يوم" · "كل شهر يوم 25" · "آخر كل شهر" · "كل 3 شهور" ---------- */
-const DAY_RAW = [['الأحد', 'الاحد', 'احد', 'أحد', 'حد', 'sunday'], ['الاثنين', 'الإثنين', 'الاتنين', 'اتنين', 'اثنين', 'إثنين', 'monday'], ['الثلاثاء', 'التلات', 'التلاتاء', 'تلات', 'ثلاثاء', 'tuesday'], ['الأربعاء', 'الاربعاء', 'الاربع', 'اربع', 'أربع', 'أربعاء', 'اربعاء', 'wednesday'], ['الخميس', 'خميس', 'thursday'], ['الجمعة', 'الجمعه', 'جمعة', 'جمعه', 'friday'], ['السبت', 'سبت', 'saturday']];
+const DAY_RAW = [['الأحد', 'الاحد', 'احد', 'أحد', 'sunday'], ['الاثنين', 'الإثنين', 'الاتنين', 'اتنين', 'اثنين', 'إثنين', 'monday'], ['الثلاثاء', 'التلات', 'التلاتاء', 'ثلاثاء', 'tuesday'], ['الأربعاء', 'الاربعاء', 'الاربع', 'أربعاء', 'اربعاء', 'wednesday'], ['الخميس', 'خميس', 'thursday'], ['الجمعة', 'الجمعه', 'جمعة', 'جمعه', 'friday'], ['السبت', 'سبت', 'saturday']];
 const DAY_ALT = DAY_RAW.flat().sort((a, b) => b.length - a.length).join('|');
+const DAY_B = `(?:${DAY_ALT})(?![\\p{L}])`; // a day name must end at a word boundary («كل تلاتة أيام» is not Tuesday)
 const dayIdx = w => { const n = normAr(w); return DAY_RAW.findIndex(v => v.some(x => normAr(x) === n)); };
 export function recurFrom(raw, base = today()) {
-  const t = String(raw || '').replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
-  let m = t.match(new RegExp(`(?:كل|every)\\s+(?:يوم\\s+)?((?:${DAY_ALT})(?:\\s*(?:و|،|,|and)\\s*(?:يوم\\s+)?(?:${DAY_ALT}))*)`, 'i'));
-  if (m) { const days = [...m[1].matchAll(new RegExp(DAY_ALT, 'gi'))].map(x => dayIdx(x[0])).filter(i => i >= 0); if (days.length) return { recur: { f: 'weekly', days: [...new Set(days)].sort() }, span: m[0] }; }
-  m = t.match(/(?:في\s+)?(?:آخر|اخر|نهاية|نهايه)\s+كل\s+شهر|كل\s+(?:آخر|اخر)\s+شهر|end of every month|last (?:work)?day of (?:every|each) month/i);
+  const t = asciiDigits(raw);
+  let m = t.match(new RegExp(`(?:كل|every)\\s+(?:يوم\\s+)?(${DAY_B}(?:\\s*(?:و|،|,|and)\\s*(?:يوم\\s+)?${DAY_B})*)`, 'iu'));
+  if (m) { const days = [...m[1].matchAll(new RegExp(DAY_B, 'giu'))].map(x => dayIdx(x[0])).filter(i => i >= 0); if (days.length) return { recur: { f: 'weekly', days: [...new Set(days)].sort() }, span: m[0] }; }
+  m = t.match(/(?:في\s+)?(?:آخر|اخر|نهاية|نهايه)\s+(?:يوم\s+)?(?:في\s+|من\s+)?كل\s+شهر|كل\s+(?:آخر|اخر)\s+(?:يوم\s+(?:في\s+|من\s+)?(?:ال)?)?شهر|end of every month|last (?:work)?day of (?:every|each) month/i);
   if (m) return { recur: { f: 'monthly', dom: 'last' }, span: m[0] };
   m = t.match(/كل\s+(?:3|تلات|ثلاث|ثلاثة|تلاتة|تلاته|ثلاثه)\s+(?:شهور|أشهر|اشهر)|ربع\s+سنوي(?:ًا|ا)?|كل\s+ربع(?:\s+سن[ةه])?|quarterly|every quarter/i);
   if (m) { const d = t.match(/يوم\s+(\d{1,2})(?!\d)/); return { recur: { f: 'quarterly', dom: d ? Math.min(31, +d[1]) : pd(base).getDate() }, span: m[0] }; }
-  m = t.match(/كل\s+شهر\s+(?:يوم|في)?\s*(\d{1,2})(?!\d)|(?:يوم|في)\s+(\d{1,2})\s+(?:من\s+)?كل\s+شهر|every month on (?:the )?(\d{1,2})/i);
-  if (m) return { recur: { f: 'monthly', dom: Math.max(1, Math.min(31, +(m[1] || m[2] || m[3]))) }, span: m[0] };
+  m = t.match(/كل\s+شهر\s+(?:يوم|في)?\s*(\d{1,2})(?!\d)|(?:يوم|في)\s+(\d{1,2})\s+(?:من\s+)?كل\s+شهر|every month on (?:the )?(\d{1,2})|كل\s+يوم\s+(\d{1,2})(?!\d)/i);
+  if (m) return { recur: { f: 'monthly', dom: Math.max(1, Math.min(31, +(m[1] || m[2] || m[3] || m[4]))) }, span: m[0] };
   m = t.match(/كل\s+شهر|شهري(?:ًا|ا|اً)|monthly|every month/i);
   if (m) return { recur: { f: 'monthly', dom: pd(base).getDate() }, span: m[0] };
-  m = t.match(/كل\s+(?:أسبوع|اسبوع)|أسبوعي(?:ًا|ا|اً)|اسبوعي(?:ًا|ا|اً)|weekly|every week/i);
-  if (m) return { recur: { f: 'weekly', days: [pd(base).getDay()] }, span: m[0] };
+  m = t.match(/كل\s+(?:أسبوع|اسبوع)(?![\p{L}])|أسبوعي(?:ًا|ا|اً)|اسبوعي(?:ًا|ا|اً)|weekly|every week/iu);
+  if (m) return { recur: { f: 'weekly', days: [pd(shiftWork(base)).getDay()] }, span: m[0] };
   m = t.match(/كل\s+يوم(?:\s+عمل)?|يومي(?:ًا|ا|اً)|every\s+(?:work\s*)?day|daily/i);
   if (m) return { recur: { f: 'daily' }, span: m[0] };
   return null;
@@ -359,8 +371,12 @@ export function recurNext(r, from) {
     const days = Array.isArray(r.days) && r.days.length ? r.days : [pd(from).getDay()];
     let d = addDays(from, 1); for (let i = 0; i < 7; i++) { if (days.includes(pd(d).getDay())) return shiftWork(d); d = addDays(d, 1); } return null;
   }
-  const step = r.f === 'quarterly' ? 3 : 1, f = pd(from);
-  for (let k = 0; k <= 36; k += step) { const c = monthDay(f.getFullYear(), f.getMonth() + k, r.dom ?? f.getDate()); if (c > from) return c; }
+  const step = r.f === 'quarterly' ? 3 : 1, f = pd(from), dom = r.dom ?? f.getDate();
+  let y = f.getFullYear(), m = f.getMonth();
+  if (monthDay(y, m - 1, dom) === from) m -= 1; // `from` is last month's occurrence moved past a weekend: anchor there, not on the shifted month
+  const rawDay = (yy, mm) => dom === 'last' ? lastWorkdayOf(yy, mm) : ds(new Date(yy, mm, Math.min(+dom || 1, new Date(yy, mm + 1, 0).getDate())));
+  if (rawDay(y, m) > from) return monthDay(y, m, dom); // later this month (compare before the weekend shift so a kept weekend date is not repeated 2 days later)
+  for (let k = step; k <= 36; k += step) { const c = monthDay(y, m + k, dom); if (c > from) return c; }
   return null;
 }
 /** Normalise a recurrence object (from the AI or the form). */

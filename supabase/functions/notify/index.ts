@@ -20,6 +20,12 @@ const concat = (...a: Uint8Array[]) => { const o = new Uint8Array(a.reduce((n, x
 const b64e = (u: Uint8Array) => { let s = ''; for (const b of u) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 const b64d = (s: string) => { const t = s.replace(/-/g, '+').replace(/_/g, '/'); const b = atob(t + '==='.slice((t.length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
 
+/* ---------- secrets ---------- */
+async function sameSecret(a: string, b: string) {
+  const [x, y] = await Promise.all([a, b].map(async s => new Uint8Array(await crypto.subtle.digest('SHA-256', enc(s)))));
+  let d = 0; for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i]; return d === 0 && a.length > 0;
+}
+
 /* ---------- VAPID ---------- */
 type Vapid = { pub: string; key: CryptoKey };
 let VAPID: Vapid | null = null;
@@ -77,7 +83,7 @@ function localNow(tz: string) {
   let p: Record<string, string> = {};
   try { p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short' }).formatToParts(new Date()).map(x => [x.type, x.value])); }
   catch { return localNow('Asia/Riyadh'); }
-  const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday);
+  const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(String(p.weekday || '').replace('.', '').slice(0, 3));
   return { date: `${p.year}-${p.month}-${p.day}`, min: (+p.hour % 24) * 60 + +p.minute, wd };
 }
 const toMin = (t: string) => { const m = /^(\d{2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
@@ -118,8 +124,8 @@ async function eventsFor(admin: any, uid: string) {
     if (now.min >= trig && now.min < trig + 30) ev.push({ key, msg: { title, body: `${rm > 0 ? L.inMin(rm) : L.now} · ${time}${body ? ' · ' + body : ''}`, url, tag } });
   };
   for (const x of open) {
-    if (x.due === now.date && x.due_time) timed(x.title, '', x.due_time, Number.isInteger(x.remind_min) ? x.remind_min : defRm, `t:${x.id}:${x.due}:${x.due_time}`, `./#t=${x.id}`, `t-${x.id}`);
-    for (const f of (x.followups || [])) if (f.status === 'open' && f.due === now.date && f.time) timed(`${L.fu} ${pname.get(f.person_id) || ''}`.trim(), f.what || x.title, f.time, Number.isInteger(f.remind) ? f.remind : defRm, `f:${f.id}:${f.due}:${f.time}`, `./#t=${x.id}`, `f-${f.id}`);
+    if (x.due === now.date && x.due_time) timed(x.title, '', x.due_time, Number.isInteger(x.remind_min) ? x.remind_min : defRm, `t:${x.id}:${x.due}`, `./#t=${x.id}`, `t-${x.id}`);
+    for (const f of (x.followups || [])) if (f.status === 'open' && f.due === now.date && f.time) timed(`${L.fu} ${pname.get(f.person_id) || ''}`.trim(), f.what || x.title, f.time, Number.isInteger(f.remind) ? f.remind : defRm, `f:${f.id || x.id + '/' + f.person_id}:${f.due}`, `./#t=${x.id}`, `f-${f.id}`);
   }
   return ev;
 }
@@ -131,7 +137,6 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
     if (url.searchParams.has('vapid') || body.op === 'vapid') return json(req, { key: (await vapid(admin)).pub });
-    const v = await vapid(admin);
 
     if (body.op === 'test') {
       const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
@@ -139,15 +144,21 @@ Deno.serve(async (req) => {
       if (!user) return json(req, { error: 'unauthorized' }, 401);
       const { data: prof } = await admin.from('profiles').select('lang').eq('id', user.id).maybeSingle();
       const L = prof?.lang === 'en' ? TX.en : TX.ar;
+      const v = await vapid(admin);
       const { data: subs } = await admin.from('push_subs').select('*').eq('user_id', user.id);
       const out: number[] = [];
-      for (const s of subs || []) { const st = await push(s, { title: L.test, body: L.testBody, url: './', tag: 'test' }, v); out.push(st); if (st === 404 || st === 410) await admin.from('push_subs').delete().eq('endpoint', s.endpoint); }
+      for (const s of subs || []) {
+        let st = 0; try { st = await push(s, { title: L.test, body: L.testBody, url: './', tag: 'test' }, v); } catch { st = -1; } // -1 = unusable keys
+        out.push(st); if (st === 404 || st === 410 || st === -1) await admin.from('push_subs').delete().eq('endpoint', s.endpoint);
+      }
       return json(req, { devices: out.length, statuses: out });
     }
 
     const { data: kv } = await admin.from('app_kv').select('v').eq('k', 'cron_key').maybeSingle();
-    if (!kv || req.headers.get('x-cron-key') !== kv.v) return json(req, { error: 'forbidden' }, 403);
-    const { data: subs } = await admin.from('push_subs').select('*');
+    if (!kv || !(await sameSecret(req.headers.get('x-cron-key') || '', String(kv.v)))) return json(req, { error: 'forbidden' }, 403);
+    const v = await vapid(admin);
+    // the users served least recently go first, so a long list never starves the same tail every run
+    const { data: subs } = await admin.from('push_subs').select('*').order('last_ok', { ascending: true, nullsFirst: true });
     const byUser = new Map<string, Sub[]>(); (subs || []).forEach((s: Sub) => { if (!byUser.has(s.user_id)) byUser.set(s.user_id, []); byUser.get(s.user_id)!.push(s); });
     let sent = 0, dropped = 0; const t0 = Date.now();
     for (const [uid, list] of byUser) {
@@ -157,14 +168,20 @@ Deno.serve(async (req) => {
       const { data: claimed } = await admin.from('notif_sent').upsert(ev.slice(0, 6).map(e => ({ user_id: uid, key: e.key })), { onConflict: 'user_id,key', ignoreDuplicates: true }).select('key');
       const mine = new Set((claimed || []).map((d: { key: string }) => d.key));
       const fresh = ev.filter(e => mine.has(e.key)); if (!fresh.length) continue;
-      for (const e of fresh) for (const s of list) {
-        const st = await push(s, e.msg, v).catch(() => 0);
-        if (st >= 200 && st < 300) { sent++; await admin.from('push_subs').update({ last_ok: new Date().toISOString() }).eq('endpoint', s.endpoint); }
-        else if (st === 404 || st === 410) { dropped++; await admin.from('push_subs').delete().eq('endpoint', s.endpoint); }
+      for (const e of fresh) {
+        let ok = 0;
+        await Promise.all(list.map(async (s) => {
+          const st = await push(s, e.msg, v).catch(() => 0);
+          if (st >= 200 && st < 300) { ok++; sent++; await admin.from('push_subs').update({ last_ok: new Date().toISOString() }).eq('endpoint', s.endpoint); }
+          else if (st === 404 || st === 410) { dropped++; await admin.from('push_subs').delete().eq('endpoint', s.endpoint); }
+        }));
+        // nothing reached any device (push service hiccup, timeout): release the claim so the next run retries within the window
+        if (!ok && list.length) await admin.from('notif_sent').delete().match({ user_id: uid, key: e.key });
       }
     }
     return json(req, { users: byUser.size, sent, dropped });
   } catch (e) {
-    return json(req, { error: 'server', detail: String(e) }, 500);
+    console.error(e);
+    return json(req, { error: 'server' }, 500);
   }
 });

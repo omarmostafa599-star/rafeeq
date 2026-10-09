@@ -2,15 +2,17 @@
 // Input is a self-contained snapshot (no live data, no personal notes).
 import { DICT } from './i18n.js';
 
-const tr = (lang, k, v) => { let s = (DICT[lang] || DICT.ar)[k] ?? DICT.ar[k] ?? k; if (v) for (const x in v) s = s.split('{' + x + '}').join(v[x]); return s; };
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+const tr = (lang, k, v) => { const d = DICT[lang] || DICT.ar; let s = own(d, k) ? d[k] : own(DICT.ar, k) ? DICT.ar[k] : k; if (v) for (const x in v) s = s.split('{' + x + '}').join(v[x]); return s; };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const loc = lang => lang === 'en' ? 'en-GB' : 'ar-u-ca-gregory-nu-latn';
 const pd = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
-const fmtD = (lang, s, o = { day: 'numeric', month: 'short' }) => s ? new Intl.DateTimeFormat(loc(lang), o).format(pd(s)) : '';
-export const monthName = (lang, ym) => new Intl.DateTimeFormat(loc(lang), { month: 'long', year: 'numeric' }).format(pd(ym + '-01'));
+const okDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(pd(s));
+const fmtD = (lang, s, o = { day: 'numeric', month: 'short' }) => okDate(s) ? new Intl.DateTimeFormat(loc(lang), o).format(pd(s)) : '';
+export const monthName = (lang, ym) => /^\d{4}-\d{2}$/.test(ym || '') && okDate(ym + '-01') ? new Intl.DateTimeFormat(loc(lang), { month: 'long', year: 'numeric' }).format(pd(ym + '-01')) : '';
 
 const KIND = { pdf: 'PDF', img: 'IMG', sheet: 'XLS', doc: 'DOC', slides: 'PPT' };
-const fileChip = f => `<span class="rp-file k-${esc(f.kind)}"><b>${KIND[f.kind] || 'FILE'}</b><span dir="auto">${esc(f.name)}</span></span>`;
+const fileChip = f => `<span class="rp-file k-${esc(f.kind)}"><b>${own(KIND, f.kind) ? KIND[f.kind] : 'FILE'}</b><span dir="auto">${esc(f.name)}</span></span>`;
 
 /** snapshot → HTML string. mode: 'screen' | 'print' */
 export function reportHTML(s, { mode = 'screen' } = {}) {
@@ -56,7 +58,7 @@ export function reportHTML(s, { mode = 'screen' } = {}) {
     ${logItems.length ? `<section class="rp-sec"><h3>${t('rpOther')} <span class="rp-n">${logItems.length}</span></h3><div class="rp-list">${logItems.map(item).join('')}</div></section>` : ''}
     ${openItems.length ? `<section class="rp-sec"><h3>${t('rpInProgress')} <span class="rp-n">${openItems.length}</span></h3><div class="rp-list">${openItems.map(item).join('')}</div></section>` : ''}
     ${!doneItems.length && !openItems.length && !logItems.length ? `<p class="rp-empty">${t('rpEmpty')}</p>` : ''}
-    <footer class="rp-foot">${t('rpFooter', { d: fmtD(lang, (s.generated_at || '').slice(0, 10), { day: 'numeric', month: 'long', year: 'numeric' }) })}</footer>
+    <footer class="rp-foot">${t('rpFooter', { d: fmtD(lang, (s.generated_on || s.generated_at || '').slice(0, 10), { day: 'numeric', month: 'long', year: 'numeric' }) })}</footer>
   </div>`;
 }
 

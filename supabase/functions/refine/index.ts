@@ -75,8 +75,11 @@ Deno.serve(async (req) => {
     const lang = body.lang === 'en' ? 'en' : 'ar';
     const known: string[] = Array.isArray(body.people) ? body.people.map((s: unknown) => String(s).slice(0, 80)).slice(0, 300) : [];
 
-    const { data: ok } = await admin.rpc('ai_take', { uid: user.id, cap: DAILY_CAP });
-    if (ok === false) return json(req, { error: 'quota' });
+    // retired in 2.4 (the chat does this work); kept callable but counted against the shared daily cap, fail-closed
+    const { data: ok, error: qe } = await admin.rpc('ai_take', { uid: user.id, cap: DAILY_CAP });
+    if (qe || ok !== true) return json(req, { error: qe ? 'server' : 'quota' }, qe ? 500 : 200);
+    const { data: gok, error: ge } = await admin.rpc('ai_take', { uid: '00000000-0000-0000-0000-000000000000', cap: 1200 });
+    if (ge || gok !== true) return json(req, { error: ge ? 'server' : 'busy' }, ge ? 500 : 200);
 
     const payload = {
       systemInstruction: { parts: [{ text: instructions(today, weekday, lang, known) }] },
@@ -93,14 +96,16 @@ Deno.serve(async (req) => {
           body: JSON.stringify(payload),
         });
         const g = await r.json();
-        if (!r.ok) { last = g?.error?.status || String(r.status); if (r.status === 404 || r.status === 400) continue; return json(req, { error: 'gemini', detail: last }, 502); }
+        if (!r.ok) { last = g?.error?.status || String(r.status); if (r.status === 404 || r.status === 400 || r.status === 429 || r.status === 503) continue; return json(req, { error: 'gemini' }, 502); }
         const out = g?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '';
         const parsed = JSON.parse(out);
         return json(req, { result: parsed, model });
       } catch (e) { last = String(e); } finally { clearTimeout(timer); }
     }
-    return json(req, { error: 'gemini', detail: last }, 502);
+    console.warn('refine failed', last);
+    return json(req, { error: /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE/.test(last) ? 'busy' : 'gemini' }, 502);
   } catch (e) {
-    return json(req, { error: 'server', detail: String(e) }, 500);
+    console.error(e);
+    return json(req, { error: 'server' }, 500);
   }
 });

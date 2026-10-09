@@ -86,7 +86,7 @@ Today is ${o.today} (${o.weekday}). Weekend: ${wk}; every other day is a workday
 
 reply (ALWAYS): one or two short, warm, natural sentences in the SAME language and dialect as the user's last message (Egyptian → Egyptian, Gulf → Gulf, Modern Standard Arabic → MSA, English → English). No emojis.
 - Greetings / small talk: answer naturally and offer help (e.g. "ازيك" → "الحمد لله، أساعدك إزاي النهارده؟").
-- When you capture or log items, say how many and of what kind (e.g. "تمام، دول ٣ مهام."). Do NOT list them (the app shows them as cards) and do NOT ask about a missing deadline, assigner or people — the app asks those itself.
+- When you capture or log items, say how many and of what kind (e.g. "تمام، فهمت ٣ مهام." / "تمام، دول شغلتين خلصتهم."). Nothing is saved until the user confirms, so never say سجلت/حفظت/ضفت — say فهمت/جهزت. Do NOT list them (the app shows them as cards) and do NOT ask about a missing deadline, assigner or people — the app asks those itself.
 - After an edit, confirm briefly what changed.
 - Off-topic questions: answer in one short sentence, then offer to help with their work.
 
@@ -136,9 +136,9 @@ Deno.serve(async (req) => {
     const text = String(body.text ?? '').slice(0, 2000).trim();
     if (!text) return json(req, { error: 'empty' }, 400);
     const today = /^\d{4}-\d{2}-\d{2}$/.test(body.today) ? body.today : new Date().toISOString().slice(0, 10);
-    const weekday = String(body.weekday ?? '').slice(0, 20);
+    const weekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(today + 'T12:00:00Z').getUTCDay()] ?? '';
     const lang = body.lang === 'en' ? 'en' : 'ar';
-    const list = (v: unknown, n: number) => Array.isArray(v) ? v.map((s) => String(s).slice(0, 80)).slice(0, n) : [];
+    const list = (v: unknown, n: number) => Array.isArray(v) ? v.map((s) => String(s).replace(/[\r\n\t|]+/g, ' ').trim().slice(0, 80)).filter(Boolean).slice(0, n) : [];
     const known = list(body.people, 300), sources = list(body.sources, 30);
     const weekend = Array.isArray(body.weekend) && body.weekend.length && body.weekend.length <= 3 && body.weekend.every((d: unknown) => Number.isInteger(d) && (d as number) >= 0 && (d as number) <= 6) ? body.weekend as number[] : [5, 6];
     // short conversation memory: alternating user/model turns, oldest first
@@ -153,10 +153,12 @@ Deno.serve(async (req) => {
     const pendingQ = typeof body.pending === 'string' ? body.pending.slice(0, 40) : '';
     const last = `Current drafts (numbered, not saved yet): ${drafts}${pendingQ ? `\nThe app is currently asking the user about: ${pendingQ}` : ''}\n\nUser message:\n${text}`;
 
-    const { data: ok } = await admin.rpc('ai_take', { uid: user.id, cap: DAILY_CAP });
-    if (ok === false) return json(req, { error: 'quota' });
-    const { data: gok } = await admin.rpc('ai_take', { uid: '00000000-0000-0000-0000-000000000000', cap: 1200 }); // all users together, per day (free tier)
-    if (gok === false) return json(req, { error: 'busy' });
+    const { data: ok, error: qe } = await admin.rpc('ai_take', { uid: user.id, cap: DAILY_CAP });
+    if (qe) { console.error(qe); return json(req, { error: 'server' }, 500); }
+    if (ok !== true) return json(req, { error: 'quota' });
+    const { data: gok, error: ge } = await admin.rpc('ai_take', { uid: '00000000-0000-0000-0000-000000000000', cap: 1200 }); // all users together, per day (free tier)
+    if (ge) { console.error(ge); return json(req, { error: 'server' }, 500); }
+    if (gok !== true) return json(req, { error: 'busy' });
 
     const payload = {
       systemInstruction: { parts: [{ text: instructions({ today, weekday, lang, known, sources, weekend }) }] },
@@ -174,14 +176,19 @@ Deno.serve(async (req) => {
         });
         const g = await r.json();
         if (!r.ok) { lastErr = g?.error?.status || String(r.status); if (r.status === 404 || r.status === 400 || r.status === 429 || r.status === 503) continue; return json(req, { error: 'gemini', detail: lastErr }, 502); }
+        if (g?.candidates?.[0]?.finishReason === 'MAX_TOKENS') { lastErr = 'TRUNCATED'; continue; }
         const out = g?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '';
         const res = JSON.parse(out);
         if (body.v !== 2 && ['chat', 'edit', 'save', 'cancel'].includes(res.intent)) res.intent = 'other'; // clients before 2.5
         return json(req, { result: res, model });
-      } catch (e) { lastErr = String(e); } finally { clearTimeout(timer); }
+      } catch (e) { lastErr = (e as { name?: string })?.name === 'AbortError' ? 'TIMEOUT' : String(e); } finally { clearTimeout(timer); }
     }
-    return json(req, { error: /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE/.test(lastErr) ? 'busy' : 'gemini', detail: lastErr }, /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE/.test(lastErr) ? 200 : 502);
+    console.warn('assist failed', lastErr);
+    if (/429|RESOURCE_EXHAUSTED|503|UNAVAILABLE/.test(lastErr)) return json(req, { error: 'busy' });
+    if (lastErr === 'TIMEOUT') return json(req, { error: 'timeout' });
+    return json(req, { error: 'gemini' }, 502);
   } catch (e) {
-    return json(req, { error: 'server', detail: String(e) }, 500);
+    console.error(e);
+    return json(req, { error: 'server' }, 500);
   }
 });

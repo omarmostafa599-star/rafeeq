@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com; frame-src https://drive.google.com https://docs.google.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>رفيق</title>
 <meta name="description" content="مهامك ومتابعاتك في مكان واحد">
@@ -204,13 +205,13 @@ main{padding:8px 16px calc(110px + env(safe-area-inset-bottom,0px));max-width:76
 .chip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-2)}
 .chip .wk{font-size:11px;color:var(--wait)}
 .chip.datein{padding-inline-end:4px;position:relative}
-.chip.datein input{border:none;background:transparent;min-height:30px;max-width:150px;font-size:13px;color:inherit}
+.chip.datein input{border:none;background:transparent;min-height:30px;max-width:170px;font-size:16px;color:inherit}
 .opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 
 /* sheets */
 .backdrop{position:fixed;inset:0;background:rgba(15,21,34,.45);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
 .backdrop.on{opacity:1;pointer-events:auto}
-.sheet{position:fixed;bottom:0;inset-inline:0;margin-inline:auto;max-width:560px;background:var(--card);color:var(--ink);border-radius:22px 22px 0 0;box-shadow:var(--shadow-up);z-index:41;transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);max-height:92vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet{position:fixed;bottom:0;inset-inline:0;margin-inline:auto;max-width:560px;background:var(--card);color:var(--ink);border-radius:22px 22px 0 0;box-shadow:var(--shadow-up);z-index:41;transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);max-height:92vh;max-height:92dvh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
 .sheet.on{transform:none}
 .grab{width:42px;height:5px;border-radius:5px;background:var(--line-2);margin:9px auto 2px;flex:none}
 .sheet-h{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 16px}
@@ -220,7 +221,7 @@ main{padding:8px 16px calc(110px + env(safe-area-inset-bottom,0px));max-width:76
 .form{display:flex;flex-direction:column;gap:14px}
 .fld{display:flex;flex-direction:column;gap:6px}
 .fld>span{font-size:13px;font-weight:600;color:var(--ink-2)}
-.fld input:not([type=checkbox]),.fld select,.fld textarea{width:100%;border:1px solid var(--line-2);background:var(--card);border-radius:12px;padding:9px 12px;min-height:44px;font-size:15px;color:var(--ink)}
+.fld input:not([type=checkbox]),.fld select,.fld textarea{width:100%;border:1px solid var(--line-2);background:var(--card);border-radius:12px;padding:9px 12px;min-height:44px;font-size:16px;color:var(--ink)}
 .fld textarea{resize:vertical;line-height:1.55}
 .fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -430,10 +431,11 @@ body.presenting{overflow:hidden}
   html,body{background:#fff!important}
   body.printing>*:not(#printArea){display:none!important}
   body.printing #printArea{display:block}
+  body.printing,body.printing.presenting{overflow:visible!important;height:auto!important}
 }
 
 /* assistant chat */
-.sheet.chat{height:92vh;max-width:620px}
+.sheet.chat{height:92vh;height:92dvh;max-width:620px}
 .sheet.chat .sheet-b{display:flex;flex-direction:column;padding:0;overflow:hidden;flex:1;min-height:0}
 .chat-t{display:inline-flex;align-items:center;gap:6px;color:var(--accent-2)}
 .chat-log{flex:1;overflow:auto;padding:8px 14px 12px;display:flex;flex-direction:column;gap:10px;background:var(--paper)}
@@ -474,7 +476,7 @@ body.presenting{overflow:hidden}
 .chat-sugg:empty{display:none}
 .chat-sugg .chip{flex:none;min-height:30px;font-size:12.5px}
 .chat-foot .composer{padding:6px 10px}
-.chat-foot .composer textarea{min-height:26px;font-size:15.5px}
+.chat-foot .composer textarea{min-height:26px;font-size:16px}
 .chat-foot .tools{min-height:42px}
 .linkbtn.sm{font-size:12.5px;display:inline-flex;align-items:center;gap:4px;color:var(--ink-2)}
 .send{width:42px;height:42px;border-radius:50%;border:none;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
@@ -538,7 +540,7 @@ body.presenting{overflow:hidden}
 </style>
 <script src="config.js"></script>
 <script src="vendor/supabase.js"></script>
-<script>window.RAFEEQ_VERSION = '2.5.1';</script>
+<script src="js/version.js"></script>
 </head>
 <body>
 <div class="shell" id="shell" dir="rtl">

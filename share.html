@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-fV6JNrUVbJqaMez7HqceV8j54DGo9IfWuCyjhEdBBUU='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://*.supabase.co; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-m8Uh//xNtxcutq0q2ZQzQiIppiry12sFkTMV3OcZBG4='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://*.supabase.co; base-uri 'none'; form-action 'none'">
 <title>رفيق</title>
 <meta name="theme-color" content="#EEF1F5">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
@@ -36,7 +36,7 @@ import { reportHTML, ensureReportCSS, monthName } from './js/report.js';
 import { DICT } from './js/i18n.js';
 const out = document.getElementById('out');
 const CFG = window.RAFEEQ_CONFIG || {};
-const tok = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim();
+let tok = ''; try { tok = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim(); } catch { tok = ''; }
 const fail = (lang = 'ar') => { document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'; out.innerHTML = `<div class="msg"><div class="mk">${lang === 'ar' ? 'ر' : 'R'}</div>${DICT[lang].shareInvalid}</div>`; };
 async function load() {
   if (!tok || tok.length < 20 || !CFG.supabaseUrl) return fail();

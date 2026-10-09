@@ -2,7 +2,7 @@
 import { state, onChange, boot, enterLocal, signInGoogle, signOut, cloudReady, putTask, putPerson, putFile, newTask, newPerson, newFile, saveProfile, syncNow, uuid, nowISO, bulkReplace, localLeftovers, adoptLocalLeftovers, authError, connectDrive, unlinkDrive, refreshDriveStatus, invokeRefine, invokeAssist, sb, pushSupported, pushCurrent, pushEnable, pushDisable, pushTest } from './data.js';
 import { reportHTML, ensureReportCSS, monthName } from './report.js';
 import { uploadFile, trashFile, renameFile, fileBlob, viewUrl, previewUrl, rootFolderUrl, kindOf, extLabel, fmtSize, MAX_BYTES } from './drive.js';
-import { parseCapture, splitTasks, isLogText, splitLogs, logDate, recurNext, cleanRecur, setWeekend, weekendDays, weekStartDay, today, addDays, diffDays, pd, ds, nextWeekday, addWorkdays, isWeekend, validDate, findPeople, nameTokens, normAr } from './parse.js';
+import { parseCapture, splitTasks, isLogText, splitLogs, logDate, recurNext, cleanRecur, setWeekend, weekendDays, weekStartDay, today, addDays, diffDays, pd, ds, nextWeekday, addWorkdays, isWeekend, validDate, findPeople, nameTokens, normAr, lastOfMonth } from './parse.js';
 import { DICT } from './i18n.js';
 
 /* ================= i18n & formatting ================= */
@@ -104,7 +104,7 @@ const fmtTime = s => { const m = /^(\d{2}):(\d{2})$/.exec(s || ''); return m ? d
 function recurLabel(r) {
   if (!r) return '';
   if (r.f === 'daily') return t('rcDaily');
-  if (r.f === 'weekly') return t('rcWeekly', { d: (r.days || []).map(d => L() === 'ar' ? wdName(d).replace(/^ال/, '') : wdName(d)).join(L() === 'ar' ? ' و' : ', ') || '' });
+  if (r.f === 'weekly') { const days = r.days || []; if (!days.length) return t('rcWeeklyOpt', { d: '' }); return t('rcWeekly', { d: days.map(d => L() === 'ar' ? wdName(d).replace(/^ال/, '') : wdName(d)).join(L() === 'ar' ? ' و' : ', ') }); }
   if (r.f === 'monthly') return r.dom === 'last' ? t('rcMonthLast') : t('rcMonthly', { n: r.dom });
   if (r.f === 'quarterly') return r.dom === 'last' ? t('rcQuarterLast') : t('rcQuarterly', { n: r.dom });
   return '';
@@ -150,6 +150,7 @@ function applyLangTheme() {
   if (dark) shell.setAttribute('data-mode', 'dark'); else shell.removeAttribute('data-mode');
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0F1522' : '#EEF1F5');
   document.title = lang === 'ar' ? 'رفيق' : 'Rafeeq';
+  document.querySelector('nav[aria-label]')?.setAttribute('aria-label', t('navLabel'));
 }
 function renderAll() {
   applyLangTheme();
@@ -213,12 +214,12 @@ function renderNav() {
     <div class="nav-foot">${syncChip()}</div>`;
 }
 const meBtn = () => `<button type="button" class="me mob" data-tab="more" aria-label="${esc(t('navMore'))}"><span class="av">${esc(initials(state.profile.display_name || '?'))}</span></button>`;
-const badgeCount = () => live().filter(isLate).length + live().filter(isOpen).reduce((n, x) => n + openFus(x).filter(fuLate).length, 0);
+const badgeCount = () => { const act = live().filter(x => isOpen(x) && !x.archived); return act.filter(isLate).length + act.reduce((n, x) => n + openFus(x).filter(fuLate).length, 0); };
 function syncChip() {
   const s = state.sync;
   if (state.mode === 'local') return `<button type="button" class="sync local" data-tab="more">${sic('info')}${t('syncLocal')}</button>`;
   if (s.status === 'offline') return `<span class="sync warn">${sic('cloud')}${t('syncOffline')}${s.pending ? ` · <b class="num">${s.pending}</b>` : ''}</span>`;
-  if (s.status === 'error') return `<button type="button" class="sync err" data-act="sync">${sic('cloud')}${t('syncError')}</button>`;
+  if (s.status === 'error' || (s.rejected || []).length) return `<button type="button" class="sync err" data-tab="more">${sic('cloud')}${t('syncError')}</button>`;
   if (s.status === 'syncing' || s.pending) return `<span class="sync" title="${esc(t('syncing'))}">${sic('cloud')}<span class="sl">${t('syncing')}</span></span>`;
   return `<span class="sync ok" title="${esc(t('synced'))}">${sic('check')}<span class="sl">${t('synced')}</span></span>`;
 }
@@ -242,7 +243,7 @@ function go(tab) { UI.tab = tab; closeAllLayers(); renderNav(); renderMain(); wi
 /* ================= components ================= */
 function statusPill(x) {
   if (isLog(x)) return `<span class="pill log">${sic('check', 12)}${t('logPill')}</span>`;
-  const m = { todo: ['', 'stTodo'], prog: ['prog', 'stProg'], wait: ['wait', 'stWait'], hold: ['', 'stHold'], done: ['done', 'stDone'], cancelled: ['', 'stCancelled'] }[x.status];
+  const m = { todo: ['', 'stTodo'], prog: ['prog', 'stProg'], wait: ['wait', 'stWait'], hold: ['', 'stHold'], done: ['done', 'stDone'], cancelled: ['', 'stCancelled'] }[x.status] || ['', 'stTodo'];
   return `<span class="pill ${m[0]}">${x.status === 'wait' ? sic('clock', 13) : ''}${t(m[1])}</span>`;
 }
 function duePill(x) {
@@ -261,7 +262,7 @@ function taskCard(x, opts = {}) {
     x.due_time && isOpen(x) ? `<span class="num">${sic('clock', 13)} ${fmtTime(x.due_time)}</span>` : '',
     x.recur ? `<span class="rc" title="${esc(recurLabel(x.recur))}">${sic('repeat', 13)}</span>` : '',
     x.priority === 'hi' && isOpen(x) ? `<span class="pill hi">${t('prioHi')}</span>` : '',
-    x.status === 'wait' && x.waiting_on ? `<span>${t('waitingFrom', { w: t('w_' + x.waiting_what), p: esc(pname(x.waiting_on)) })}</span>` : '',
+    x.status === 'wait' && x.waiting_on ? `<span>${t('waitingFrom', { w: t('w_' + (x.waiting_what || 'reply')), p: esc(pname(x.waiting_on)) })}</span>` : '',
     nf && x.status !== 'wait' ? `<span>${sic('users', 13)} ${esc(pname(nf.person_id).split(' ').slice(0, 2).join(' '))} · ${rel(nf.due)}</span>` : '',
     x.project ? `<span dir="auto">${esc(x.project)}</span>` : '',
     done && x.completed_on ? `<span>${t('doneOn', { d: fmtShort(x.completed_on) })}</span>` : '',
@@ -277,7 +278,7 @@ function fuRow(x, f) {
   return `<div class="fu-row ${fuLate(f) ? 'late' : ''}"><span class="av">${esc(initials(pname(f.person_id)))}</span>
     <div class="body" data-open="${x.id}" role="button" tabindex="0"><div class="t" dir="auto">${esc(pname(f.person_id))}</div>
       <div class="meta"><span dir="auto">${esc(f.what || x.title)}</span>${f.time ? `<span class="num">${sic('clock', 12)} ${fmtTime(f.time)}</span>` : ''}${fuLate(f) ? `<span class="pill late">${lateTxt(f.due)}</span>` : ''}</div></div>
-    <button type="button" class="iconbtn sm" data-act="remind" data-id="${x.id}" data-fu="${f.id}" aria-label="${esc(t('remind'))}" title="${esc(t('remind'))}">${sic('send', 17)}</button><button type="button" class="btn sm" data-act="furesult" data-id="${x.id}" data-fu="${f.id}">${t('logResult')}</button></div>`;
+    <button type="button" class="iconbtn sm" data-act="remind" data-id="${x.id}" data-fu="${esc(f.id)}" aria-label="${esc(t('remind'))}" title="${esc(t('remind'))}">${sic('send', 17)}</button><button type="button" class="btn sm" data-act="furesult" data-id="${x.id}" data-fu="${esc(f.id)}">${t('logResult')}</button></div>`;
 }
 const sec = (title, n, body, cls = '') => `<section class="sec"><div class="sec-h"><h3>${title}</h3>${n != null ? `<span class="cnt ${cls}">${n}</span>` : ''}</div><div class="stack">${body}</div></section>`;
 const emptyBox = (title, text, btn = '') => `<div class="empty"><div class="empty-ic">${ic.note}</div><h3>${title}</h3><p>${text}</p>${btn}</div>`;
@@ -370,12 +371,12 @@ function openFile(id) {
     const tk = f.task_id ? taskById(f.task_id) : null;
     return topBar(`<span dir="auto">${esc(f.name)}</span>`, `<button type="button" class="iconbtn" data-act="editfile" data-fid="${f.id}" aria-label="${esc(t('edit'))}">${ic.edit}</button>`) + `<div class="layer-b">
       <div class="fprev k-${kindOf(f)}" data-keep="pv-${f.id}" data-pv="${f.id}"></div>
-      <div class="save-row"><a class="btn primary block" href="${viewUrl(f.drive_id)}" target="_blank" rel="noopener">${sic('ext', 18)}${t('openInDrive')}</a><button type="button" class="btn block" data-act="dlfile" data-fid="${f.id}">${sic('download', 18)}${t('download')}</button></div>
+      <div class="save-row"><a class="btn primary block" href="${esc(viewUrl(f.drive_id))}" target="_blank" rel="noopener">${sic('ext', 18)}${t('openInDrive')}</a><button type="button" class="btn block" data-act="dlfile" data-fid="${f.id}">${sic('download', 18)}${t('download')}</button></div>
       <div class="kv num">
         <div><small>${t('fType')}</small><b>${extLabel(f)}</b></div>
         <div><small>${t('fSize')}</small><b><bdi>${fmtSize(f.size) || '—'}</bdi></b></div>
         <div><small>${t('fUploaded')}</small><b>${wd(localDay(f.created_at))} ${fmtShort(localDay(f.created_at))}</b></div>
-        <div><small>${t('fPerson')}</small><b dir="auto">${f.person_id ? `<button type="button" class="linkbtn inl" data-person="${f.person_id}">${esc(pname(f.person_id))}</button>` : t('noLink')}</b></div>
+        <div><small>${t('fPerson')}</small><b dir="auto">${f.person_id ? `<button type="button" class="linkbtn inl" data-person="${esc(f.person_id)}">${esc(pname(f.person_id))}</button>` : t('noLink')}</b></div>
         <div class="wide"><small>${t('fTask')}</small><b dir="auto">${tk && !tk.deleted ? `<button type="button" class="linkbtn inl" data-open="${tk.id}">${esc(tk.title)}</button>` : t('noLink')}</b></div>
         ${f.note ? `<div class="wide"><small>${t('fNote')}</small><b class="d-text" dir="auto" style="margin:0">${esc(f.note)}</b></div>` : ''}
       </div>
@@ -387,7 +388,7 @@ function openFile(id) {
 async function mountPreview(root, f) {
   const box = root.querySelector(`[data-pv="${f.id}"]`); if (!box || box.dataset.loaded) return;
   box.dataset.loaded = '1';
-  const fallback = () => { box.innerHTML = `<iframe src="${previewUrl(f.drive_id)}" title="${esc(f.name)}" loading="lazy" allow="autoplay" referrerpolicy="no-referrer"></iframe>`; };
+  const fallback = () => { box.innerHTML = `<iframe src="${esc(previewUrl(f.drive_id))}" title="${esc(f.name)}" loading="lazy" allow="autoplay" referrerpolicy="no-referrer"></iframe>`; };
   if (kindOf(f) !== 'img') { fallback(); return; }
   box.innerHTML = `<div class="pv-wait"><span class="spin"></span></div>`;
   try {
@@ -449,7 +450,7 @@ const VIEWS = {
     const dueToday = sortTasks(act.filter(x => x.due === td && x.status !== 'wait'));
     const fus = []; act.forEach(x => openFus(x).forEach(f => { if (f.due && f.due <= td) fus.push([x, f]); }));
     fus.sort((a, b) => a[1].due < b[1].due ? -1 : 1);
-    const waiting = sortTasks(act.filter(x => x.status === 'wait' && !(x.due && x.due <= td)));
+    const waiting = sortTasks(act.filter(x => x.status === 'wait' && !isLate(x)));
     const soon = sortTasks(act.filter(x => x.due && x.due > td && x.due <= addDays(td, 7) && x.status !== 'wait'));
     const nodue = sortTasks(act.filter(x => !x.due && x.status === 'prog'));
     const actionable = act.filter(x => x.status === 'todo' || x.status === 'prog');
@@ -538,8 +539,8 @@ const VIEWS = {
     if (UI.pushOn === undefined && state.mode === 'cloud' && pushSupported()) { UI.pushOn = null; pushCurrent().then(sb2 => { UI.pushOn = !!sb2; if (UI.tab === 'more') renderMain(); }).catch(() => { UI.pushOn = false; }); }
     return `<header class="hdr"><div class="grow"><h1>${t('navMore')}</h1></div></header>
       <button type="button" class="profile" data-act="profile"><span class="av xl">${esc(initials(p.display_name || '?'))}</span><span class="body"><b dir="auto">${esc(p.display_name || t('yourName'))}</b><span class="sub" dir="auto">${esc(p.job_title || t('addJobTitle'))}</span>${u ? `<span class="sub mail">${esc(u.email || '')}</span>` : `<span class="sub">${t('localAccount')}</span>`}</span>${sic('edit', 18)}</button>
-      ${(() => { const h = harvest(thisYM()); const r = h.kpis.onTimeRate == null ? '—' : Math.round(h.kpis.onTimeRate * 100) + '%'; return `<button type="button" class="hcard" data-act="harvest"><span class="mi lg">${ic.spark}</span><span class="grow"><b>${t('rpTitle', { m: monthName(L(), thisYM()) })}</b><small>${t('harvestCardSub', { n: h.kpis.done, r })}</small></span><span class="hcta">${t('present')} · PDF${state.mode === 'cloud' ? ' · ' + t('shareLink') : ''}</span></button>`; })()}
-      <div class="card sync-card">${state.mode === 'cloud' ? `<div class="row-between"><span>${syncChip()}</span><button type="button" class="btn sm" data-act="sync">${t('syncNow')}</button></div><p class="note">${state.sync.last ? t('lastSync', { d: new Intl.DateTimeFormat(LOC(), { hour: 'numeric', minute: '2-digit' }).format(new Date(state.sync.last)) }) : ''}${state.sync.error ? ` · <span class="err-txt">${esc(state.sync.error)}</span>` : ''}</p>` : `<p class="note" style="margin-top:0">${t('localExplain')}</p>${cloudReady ? `<button type="button" class="gbtn sm" data-act="google">${gLogo}${t('continueGoogle')}</button>` : ''}`}</div>
+      ${(() => { const h = harvest(thisYM()); const r = h.kpis.onTimeRate == null ? t('noRateYet') : t('onTimeOf', { r: Math.round(h.kpis.onTimeRate * 100) + '%' }); return `<button type="button" class="hcard" data-act="harvest"><span class="mi lg">${ic.spark}</span><span class="grow"><b>${t('rpTitle', { m: monthName(L(), thisYM()) })}</b><small>${t('harvestCardSub', { n: plural(h.kpis.done, 'doneN'), r })}</small></span><span class="hcta">${t('present')} · PDF${state.mode === 'cloud' ? ' · ' + t('shareLink') : ''}</span></button>`; })()}
+      <div class="card sync-card">${state.mode === 'cloud' ? `<div class="row-between"><span>${syncChip()}</span><button type="button" class="btn sm" data-act="sync">${t('syncNow')}</button></div><p class="note">${state.sync.last ? t('lastSync', { d: new Intl.DateTimeFormat(LOC(), { hour: 'numeric', minute: '2-digit' }).format(new Date(state.sync.last)) }) : ''}${state.sync.error ? ` · <span class="err-txt">${esc(state.sync.error === 'storage' ? t('storageFull') : state.sync.error)}</span>` : ''}</p>${(state.sync.rejected || []).length ? `<p class="note err-txt">${t('syncRejected', { n: state.sync.rejected.length })} <span dir="ltr">${esc(state.sync.rejected[state.sync.rejected.length - 1].msg)}</span></p>` : ''}` : `<p class="note" style="margin-top:0">${t('localExplain')}</p>${cloudReady ? `<button type="button" class="gbtn sm" data-act="google">${gLogo}${t('continueGoogle')}</button>` : ''}`}</div>
       <div class="menu">
         <button type="button" data-act="lang"><span class="mi">${ic.globe}</span><span class="grow">${t('language')}<small>${L() === 'ar' ? 'العربية' : 'English'}</small></span><span class="val">${L() === 'ar' ? 'English' : 'العربية'}</span></button>
         <button type="button" data-act="theme"><span class="mi">${ic.moon}</span><span class="grow">${t('appearance')}<small>${(p.settings || {}).theme === 'dark' ? t('themeDark') : t('themeLight')}</small></span></button>
@@ -568,10 +569,10 @@ function v1Data() {
 }
 function leftoversBanner() {
   const v1 = v1Data();
-  if (v1) return `<div class="banner"><span>${t('v1Found', { n: v1.tasks.length })}</span><button type="button" class="btn sm primary" data-act="importv1">${t('importNow')}</button><button type="button" class="btn sm ghost" data-act="skipv1">${t('notNow')}</button></div>`;
+  if (v1) return `<div class="banner"><span>${t('v1Found', { n: plural(v1.tasks.length, 'tasks') })}</span><button type="button" class="btn sm primary" data-act="importv1">${t('importNow')}</button><button type="button" class="btn sm ghost" data-act="skipv1">${t('notNow')}</button></div>`;
   if (state.mode !== 'cloud') return '';
   const c = localLeftovers(); if (!c) return '';
-  return `<div class="banner"><span>${t('leftovers', { n: c.tasks.length })}</span><button type="button" class="btn sm primary" data-act="adopt">${t('uploadThem')}</button></div>`;
+  return `<div class="banner"><span>${t('leftovers', { n: plural(c.tasks.length, 'tasks') })}</span><button type="button" class="btn sm primary" data-act="adopt">${t('uploadThem')}</button></div>`;
 }
 
 /* ================= swipe ================= */
@@ -590,7 +591,7 @@ function bindSwipes(root) {
       }
       dx = mx; moved = true;
       card.style.transform = `translateX(${dx}px)`;
-      const fwd = rtl ? dx > 0 : dx > 0; // right = done, left = later (both directions, consistent with the hint)
+      const fwd = dx > 0; // right = done, left = later (same in both directions, consistent with the hint)
       sw.classList.toggle('to-done', fwd && Math.abs(dx) > 40); sw.classList.toggle('to-later', !fwd && Math.abs(dx) > 40);
     });
     const end = () => {
@@ -598,6 +599,7 @@ function bindSwipes(root) {
       card.style.transition = '';
       if (dx > 90) quickDone(id); else if (dx < -90) postpone(id);
       card.style.transform = ''; sw.classList.remove('to-done', 'to-later'); x0 = null;
+      if (!moved) return; setTimeout(() => { moved = false; }, 0); // a cancelled gesture must not swallow the next tap
     };
     card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
     card.addEventListener('click', e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
@@ -611,20 +613,22 @@ function quickDone(id) {
   x.status = 'done'; x.completed_on = T(); x.waiting_on = x.waiting_on || null; addLog(x, 'completed');
   const nx = spawnNext(x);
   putTask(x); UI.keepScroll = true;
-  toast(t('completedToast') + (nx ? ' · ' + t('nextOn', { d: rel(nx.due) }) : ''), () => { putTask(prev); if (nx) { nx.deleted = true; putTask(nx); } });
-  askCloseFus(x);
+  const undo = () => { putTask(prev); if (nx) { nx.deleted = true; putTask(nx); } };
+  toast(t('completedToast') + (nx ? ' · ' + t('nextOn', { d: rel(nx.due) }) : ''), undo);
+  askCloseFus(x, undo);
 }
-function askCloseFus(x) {
+function askCloseFus(x, undo) {
   const n = openFus(x).length; if (!n) return;
   confirmSheet(t('closeFusQ', { n: plural(n, 'openFu') }), t('closeFus'), () => {
-    openFus(x).forEach(f => { f.status = 'done'; f.closed_on = T(); f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: t('closedWithTask'), outcome: 'done' }); });
-    putTask(x); toast(t('fusClosed'));
+    const y = taskById(x.id) || x;
+    openFus(y).forEach(f => { f.status = 'done'; f.closed_on = T(); f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: '', outcome: 'closed_with_task' }); });
+    putTask(y); toast(t('fusClosed'), undo); // keep the undo reachable after answering the question
   }, false);
 }
 function postpone(id) {
   const x = taskById(id); if (!x) return;
   const prev = structuredClone(x);
-  const nd = nextWorkday(); addLog(x, 'due', '', { from: x.due, to: nd }); x.due = nd;
+  const nd = addWorkdays(x.due && x.due > T() ? x.due : T(), 1); addLog(x, 'due', '', { from: x.due, to: nd }); x.due = nd; // never pulls a future task back to tomorrow
   putTask(x); UI.keepScroll = true;
   toast(t('postponedTo', { d: rel(nd) }), () => putTask(prev));
 }
@@ -634,6 +638,7 @@ function setStatus(x, s) {
   x.status = s; if (s !== 'wait') x.waiting_on = null;
   putTask(x);
 }
+const fuLogText = l => l.text || (l.outcome === 'closed_with_task' ? t('closedWithTask') : l.outcome === 'person_deleted' ? t('personDeletedLog') : l.outcome === 'done' ? t('fuDone') : t('fuNotYet'));
 function logText(e) {
   const d = e.data || {};
   switch (e.kind) {
@@ -700,8 +705,8 @@ function scheduleAI() { /* background refine retired in 2.4: everything is settl
 function matchPerson(name) {
   const key = nameTokens(name).join(' '); if (!key) return null;
   const ex = people().find(p => nameTokens(p.name).join(' ') === key); if (ex) return ex.id;
-  const h = findPeople(name, people());
-  return h.length === 1 && h[0].ids.length === 1 && nameTokens(name).length <= 3 ? h[0].ids[0] : null;
+  const h = findPeople(name, people()), toks = nameTokens(name);
+  return h.length === 1 && h[0].ids.length === 1 && toks.length <= 3 && h[0].L === toks.length ? h[0].ids[0] : null; // «خالد محمد» must not resolve to «خالد أحمد»
 }
 function undoAI(id) {
   const x = taskById(id); if (!x?.ai?.before || x.ai.st !== 'done') return;
@@ -824,8 +829,8 @@ function openChat(prefill = '') {
 function renderChat(scroll = true) {
   const log = $('#chatLog'); if (!log) return;
   const pend = pending();
-  const drafts = CH.drafts.length || CH.thinking ? `<div class="bubble bot drafts">${CH.drafts.length > 1 ? `<div class="dh">${t(CH.drafts.every(isLogD) ? 'nLogsFound' : CH.drafts.some(isLogD) ? 'nItemsFound' : 'nTasksFound', { n: CH.drafts.length })}</div>` : ''}${CH.drafts.map((d, n) => draftCard(d, n, pend && pend.n === n)).join('')}
-      ${CH.thinking ? `<div class="thinking"><span class="dots"><i></i><i></i><i></i></span>${t(CH.drafts.length ? 'improving' : 'understanding')}</div>` : pend ? questionHTML(pend) : `<div class="ready">${sic('check', 16)} ${CH.drafts.some(isLogD) ? t(CH.drafts.length > 1 ? 'readyItems' : 'readyLog') : CH.drafts.length > 1 ? t('readyAll', { n: CH.drafts.length }) : t('readyOne')}</div>`}
+  const drafts = CH.drafts.length || CH.thinking ? `<div class="bubble bot drafts">${CH.drafts.length > 1 ? `<div class="dh">${CH.drafts.every(isLogD) ? t('nLogsFound', { n: plural(CH.drafts.length, 'logs') }) : CH.drafts.some(isLogD) ? t('nItemsFound', { n: plural(CH.drafts.length, 'items') }) : t('nTasksFound', { n: plural(CH.drafts.length, 'tasks') })}</div>` : ''}${CH.drafts.map((d, n) => draftCard(d, n, pend && pend.n === n)).join('')}
+      ${CH.thinking ? `<div class="thinking"><span class="dots"><i></i><i></i><i></i></span>${t(CH.drafts.length ? 'improving' : 'understanding')}</div>` : pend ? questionHTML(pend) : `<div class="ready">${sic('check', 16)} ${CH.drafts.some(isLogD) ? t(CH.drafts.length > 1 ? 'readyItems' : 'readyLog') : CH.drafts.length > 1 ? t('readyAll', { n: plural(CH.drafts.length, 'tasks') }) : t('readyOne')}</div>`}
       ${CH.drafts.length ? `<div class="save-row"><button type="button" class="btn primary block" data-act="chatsave" ${pend || CH.thinking ? 'disabled' : ''}>${ic.check}${CH.drafts.length > 1 ? t('saveAll', { n: CH.drafts.length }) : t('save')}</button><button type="button" class="btn" data-act="chatdiscard">${t('discardDrafts')}</button></div>` : ''}</div>` : '';
   log.innerHTML = CH.msgs.map(m => `<div class="bubble ${m.who}">${m.html}</div>`).join('') + drafts;
   const sb2 = $('#chatSendBtn'); if (sb2) sb2.disabled = !!CH.thinking;
@@ -840,9 +845,9 @@ function draftCard(d, n, active) {
       d.project ? `<span class="chip sm" dir="auto">${esc(d.project)}</span>` : '', mt ? `<span class="chip sm">${sic('reopen', 13)}<span dir="auto">${t('closesTask', { t: esc(mt.title.slice(0, 40)) })}</span></span>` : ''].filter(Boolean).join('');
     return `<div class="dcard log ${active ? 'active' : ''} ${missingOf(d) ? '' : 'ok'}">
     <div class="dtop">${CH.drafts.length > 1 ? `<span class="dn num">${n + 1}</span>` : ''}<div class="dt" dir="auto">${esc(d.title)}</div>
-      <button type="button" class="iconbtn sm" data-act="draftedit" data-n="${n}" aria-label="${esc(t('edit'))}">${sic('edit', 15)}</button>
-      ${n > 0 && isLogD(CH.drafts[n - 1]) ? `<button type="button" class="iconbtn sm" data-act="draftmerge" data-n="${n}" title="${esc(t('mergePrev'))}" aria-label="${esc(t('mergePrev'))}">${sic('link', 15)}</button>` : ''}
-      <button type="button" class="iconbtn sm" data-act="draftdrop" data-n="${n}" aria-label="${esc(t('remove'))}">${sic('x', 15)}</button></div>
+      <button type="button" class="iconbtn sm" data-act="draftedit" data-n="${n}" ${CH.thinking ? 'disabled' : ''} aria-label="${esc(t('edit'))}">${sic('edit', 15)}</button>
+      ${n > 0 && isLogD(CH.drafts[n - 1]) ? `<button type="button" class="iconbtn sm" data-act="draftmerge" data-n="${n}" ${CH.thinking ? 'disabled' : ''} title="${esc(t('mergePrev'))}" aria-label="${esc(t('mergePrev'))}">${sic('link', 15)}</button>` : ''}
+      <button type="button" class="iconbtn sm" data-act="draftdrop" data-n="${n}" ${CH.thinking ? 'disabled' : ''} aria-label="${esc(t('remove'))}">${sic('x', 15)}</button></div>
     <div class="dchips">${chips}</div></div>`;
   }
   const roleTxt = t('role_' + d.role);
@@ -853,15 +858,15 @@ function draftCard(d, n, active) {
     d.recur ? `<span class="chip sm">${sic('repeat', 13)}${recurLabel(d.recur)}</span>` : '',
     d.priority === 'hi' ? `<span class="chip sm hi">${t('prioHi')}</span>` : '',
     `<span class="chip sm">${roleTxt}</span>`,
-    d.source ? `<span class="chip sm">${t('srcShort')}: ${esc(srcLabel(d.source))}</span>` : `<span class="chip sm missing">${t('srcShort')}: ؟</span>`,
+    d.source ? `<span class="chip sm">${t('srcShort')}: ${esc(srcLabel(d.source))}</span>` : `<span class="chip sm missing">${t('srcShort')}: ${L() === 'ar' ? '؟' : '?'}</span>`,
     ...ppl.map(p => `<span class="chip sm ${p.ref.kind === 'generic' || p.ref.kind === 'amb' ? 'missing' : ''}">${sic(p.role === 'waiting' ? 'clock' : 'users', 13)}<span dir="auto">${esc(refName(p.ref))}</span>${p.ref.kind === 'new' && p.ref.desc ? `<small dir="auto">· ${esc(p.ref.desc)}</small>` : ''}${p.ref.kind === 'new' ? ` <em>${t('newBadge')}</em>` : ''}</span>`),
     d.project ? `<span class="chip sm" dir="auto">${esc(d.project)}</span>` : '',
   ].filter(Boolean).join('');
   return `<div class="dcard ${active ? 'active' : ''} ${missingOf(d) ? '' : 'ok'}">
     <div class="dtop">${CH.drafts.length > 1 ? `<span class="dn num">${n + 1}</span>` : ''}<div class="dt" dir="auto">${esc(d.title)}</div>
-      <button type="button" class="iconbtn sm" data-act="draftedit" data-n="${n}" aria-label="${esc(t('edit'))}">${sic('edit', 15)}</button>
-      ${n > 0 && !isLogD(CH.drafts[n - 1]) ? `<button type="button" class="iconbtn sm" data-act="draftmerge" data-n="${n}" title="${esc(t('mergePrev'))}" aria-label="${esc(t('mergePrev'))}">${sic('link', 15)}</button>` : ''}
-      <button type="button" class="iconbtn sm" data-act="draftdrop" data-n="${n}" aria-label="${esc(t('remove'))}">${sic('x', 15)}</button></div>
+      <button type="button" class="iconbtn sm" data-act="draftedit" data-n="${n}" ${CH.thinking ? 'disabled' : ''} aria-label="${esc(t('edit'))}">${sic('edit', 15)}</button>
+      ${n > 0 && !isLogD(CH.drafts[n - 1]) ? `<button type="button" class="iconbtn sm" data-act="draftmerge" data-n="${n}" ${CH.thinking ? 'disabled' : ''} title="${esc(t('mergePrev'))}" aria-label="${esc(t('mergePrev'))}">${sic('link', 15)}</button>` : ''}
+      <button type="button" class="iconbtn sm" data-act="draftdrop" data-n="${n}" ${CH.thinking ? 'disabled' : ''} aria-label="${esc(t('remove'))}">${sic('x', 15)}</button></div>
     <div class="dchips">${chips}</div></div>`;
 }
 function questionHTML({ n, d, m }) {
@@ -930,13 +935,14 @@ async function chatSend(text, label) {
   if (CH.drafts.length && isCancel(text)) { CH.drafts = []; CH.pick = new Set(); botSay(t('draftsDiscarded')); renderChat(); return; }
   if (pend && pend.m.k !== 'match' && isConfirm(text)) { botSay(t('stillMissing')); renderChat(); return; }
   if (pend && !QUERY_RE.test(' ' + normAr(text) + ' ') && answerText(pend, text)) { renderChat(); return; }
-  const lq = localQuery(text);
+  const looksQuery = /[?؟]\s*$/.test(text) || /^(هات|اعرض|وريني|ورّيني|ايه|إيه|ما هي|ماهي|مين|من عنده|كام|عندي ايه|عندي إيه|ملخص|show|list|what|who|which|summary)(\s|$)/.test(shortN(text)) || shortN(text).split(' ').length <= 5;
+  const lq = (looksQuery || !(aiOn() && navigator.onLine)) ? localQuery(text) : null; // «اعرض التقرير على المدير بكرة» is a task, not a question
   if (lq) { CH.msgs.push({ who: 'bot', html: queryHTML(lq) }); hist('model', t('answeredQuery')); renderChat(); return; }
   const fallback = note => {
     if (!aiOn() && GREET_RE.test(shortN(text))) { botSay(t('greetLocal')); return; }
     const locals = localDrafts(text); CH.drafts.push(...locals);
     if (note) CH.msgs.push({ who: 'bot', html: `<span class="muted">${note}</span>` });
-    hist('model', t('nTasksFound', { n: locals.length }));
+    hist('model', t('nTasksFound', { n: plural(locals.length, 'tasks') }));
   };
   if (!(aiOn() && navigator.onLine)) { fallback(''); CH.pick = new Set(); renderChat(); return; }
   // show what the device understood right away; the assistant's answer replaces it a few seconds later
@@ -965,6 +971,7 @@ async function chatSend(text, label) {
   } catch (e) {
     console.warn('assist', e);
     const note = e?.code === 'quota' ? t('aiQuota') : e?.code === 'missing_key' ? t('aiNotReady') : e?.code === 'busy' ? t('aiBusy') : e?.code === 'timeout' ? t('aiSlow') : '';
+    if (e?.code === 'quota' || e?.code === 'missing_key') UI.aiBlocked = e.code;
     if (prov.length) { prov = []; CH.msgs.push({ who: 'bot', html: `<span class="muted">${note ? note + ' · ' : ''}${t('localUnderstanding')}</span>` }); }
     else fallback(`${note ? note + ' · ' : ''}${t('localUnderstanding')}`);
   } finally { CH.thinking = false; }
@@ -1028,7 +1035,7 @@ function saveDrafts() {
   }
   CH.drafts = []; CH.pick = new Set();
   const nDone = made.filter(x => x.status === 'done').length;
-  const head = !nDone ? (made.length > 1 ? t('savedN', { n: made.length }) : t('savedTask')) : nDone === made.length ? (made.length > 1 ? t('savedLogs', { n: made.length }) : t('savedLog')) : t('savedMixed', { n: made.length });
+  const head = !nDone ? (made.length > 1 ? t('savedN', { n: plural(made.length, 'tasks') }) : t('savedTask')) : nDone === made.length ? (made.length > 1 ? t('savedLogs', { n: plural(made.length, 'logs') }) : t('savedLog')) : t('savedMixed', { n: plural(made.length, 'items') });
   hist('model', head + ' ' + made.map(x => x.title).join(' / '));
   const canAttach = state.mode === 'cloud';
   CH.msgs.push({ who: 'bot', html: `${sic('check', 16)} ${head}<div class="qlist">${made.map(x => `<div class="qrow"><span class="body" data-open="${x.id}" role="button" tabindex="0"><span class="t" dir="auto">${esc(x.title)}</span><span class="meta">${x.status === 'done' ? `${statusPill(x)}<span>${x.completed_on === T() ? t('today') : fmtShort(x.completed_on)}</span>` : `<span>${x.due ? rel(x.due) : t('noDue')}${x.due_time ? ' · ' + fmtTime(x.due_time) : ''}</span>${x.recur ? `<span>${sic('repeat', 12)}</span>` : ''}`}</span></span>${canAttach ? `<button type="button" class="iconbtn sm" data-act="upload" data-task="${x.id}" aria-label="${esc(t('attach'))}" title="${esc(t('attach'))}">${sic('clip', 16)}</button>` : ''}</div>`).join('')}</div>${closed.map(y => `<div class="ask"><p>${t('closeFusQ', { n: plural(openFus(y).length, 'openFu') })} <span class="muted" dir="auto">«${esc(y.title.slice(0, 50))}»</span></p><button type="button" class="chip" data-act="closefus" data-id="${y.id}">${sic('check', 14)}${t('closeFus')}</button></div>`).join('')}` });
@@ -1042,17 +1049,18 @@ function localQuery(text) {
   const n = ' ' + normAr(text) + ' ';
   if (!QUERY_RE.test(n) && !/(مهامي|مهام اليوم|مهام بكره|متاخرات|متابعاتي|my tasks)/.test(n)) return null;
   const td = T();
-  if (/(متاخر|overdue|late)/.test(n)) return { type: 'late' };
+  if (/(متاخر|(^|\s)(overdue|late)(\s|$))/.test(n)) return { type: 'late' };
   if (/(واقف|متعطل|معلق|مين عنده|من عنده|who owes|pending follow)/.test(n)) return { type: 'followups' };
   if (/(مستني|منتظر|بانتظار|waiting)/.test(n)) return { type: 'waiting' };
   if (/(من غير موعد|بدون موعد|no due)/.test(n)) return { type: 'nodue' };
-  if (/(خلصت|انجزت|منجز|اكتمل|خلصته|عملت|عملته|انجازات|done|completed|finished|did)/.test(n)) { if (/(النهارده|اليوم|today)/.test(n)) return { type: 'done', from: td, to: td }; if (/(امبارح|امس|yesterday)/.test(n)) return { type: 'done', from: addDays(td, -1), to: addDays(td, -1) }; if (/(الشهر|month)/.test(n)) return { type: 'done', from: td.slice(0, 8) + '01', to: td }; const [s] = weekRange(td); return { type: 'done', from: s, to: td }; }
+  if (/(خلصت|انجزت|منجز|اكتمل|خلصته|عملت|عملته|انجازات|(^|\s)(done|completed|finished|did)(\s|$))/.test(n)) { if (/(النهارده|اليوم|today)/.test(n)) return { type: 'done', from: td, to: td }; if (/(امبارح|امس|yesterday)/.test(n)) return { type: 'done', from: addDays(td, -1), to: addDays(td, -1) }; if (/(الشهر|month)/.test(n)) return { type: 'done', from: td.slice(0, 8) + '01', to: td }; const [s] = weekRange(td); return { type: 'done', from: s, to: td }; }
   const hit = findPeople(text, people()); if (hit.length && hit[0].ids.length === 1) return { type: 'person', person: hit[0].ids[0] };
   const pm = text.match(/مشروع\s+(.+?)(?:\s*[?؟]|$)/); if (pm) return { type: 'project', project: pm[1].trim() };
   if (/(الاسبوع الجاي|الاسبوع القادم|next week)/.test(n)) { const s = nextWeekday(td, weekStartDay()); return { type: 'due', from: s, to: addDays(s, 6) }; }
   if (/(الاسبوع|this week)/.test(n)) { return { type: 'due', from: td, to: weekRange(td)[1] }; }
-  const p = parseCapture(text, [], td); if (p.due) return { type: 'due', from: p.due, to: p.due };
-  if (/(النهارده|اليوم|today|ملخص|summary)/.test(n)) return { type: 'due', from: td, to: td };
+  const aboutWork = /(مهام|مهمه|متابعات|عندي|ايه|what|tasks|follow|schedule|جدول|اجنده|ملخص|summary)/.test(n); // «اعرض التقرير على المدير بكرة» is work to do, not a question
+  const p = parseCapture(text, [], td); if (p.due) return aboutWork ? { type: 'due', from: p.due, to: p.due } : null;
+  if (/(النهارده|اليوم|today|ملخص|summary)/.test(n)) return aboutWork ? { type: 'due', from: td, to: td } : null;
   return /(مهام|متابعات|tasks|follow)/.test(n) ? { type: 'summary' } : null;
 }
 function normQuery(q) {
@@ -1060,32 +1068,32 @@ function normQuery(q) {
   if (q.person) out.person = matchPerson(q.person) || null;
   if (out.type === 'due' && !out.from) out.from = out.to = T();
   if (out.type === 'due' && !out.to) out.to = out.from;
-  if (out.type === 'done' && !out.from) { out.from = weekRange()[0]; out.to = T(); }
+  if (out.type === 'done') { if (!out.from) out.from = weekRange()[0]; if (!out.to) out.to = T(); }
   if (out.type === 'person' && !out.person) out.type = 'summary';
   return out;
 }
 const qRow = x => `<button type="button" class="qrow ${isLate(x) ? 'late' : ''}" data-open="${x.id}"><span class="t" dir="auto">${esc(x.title)}</span><span class="meta">${statusPill(x)}${x.due ? `<span>${isLate(x) ? lateTxt(x.due) : rel(x.due)}</span>` : ''}${x.waiting_on ? `<span dir="auto">${sic('clock', 12)} ${esc(pname(x.waiting_on))}</span>` : ''}</span></button>`;
-const qFu = (x, f) => `<div class="qrow fu ${fuLate(f) ? 'late' : ''}"><span class="av sm">${esc(initials(pname(f.person_id)))}</span><span class="body" data-open="${x.id}" role="button" tabindex="0"><span class="t" dir="auto">${esc(pname(f.person_id))}</span><span class="meta"><span dir="auto">${esc(f.what || x.title)}</span><span>${fuLate(f) ? lateTxt(f.due) : rel(f.due)}</span></span></span><button type="button" class="btn sm" data-act="furesult" data-id="${x.id}" data-fu="${f.id}">${t('logResult')}</button></div>`;
+const qFu = (x, f) => `<div class="qrow fu ${fuLate(f) ? 'late' : ''}"><span class="av sm">${esc(initials(pname(f.person_id)))}</span><span class="body" data-open="${x.id}" role="button" tabindex="0"><span class="t" dir="auto">${esc(pname(f.person_id))}</span><span class="meta"><span dir="auto">${esc(f.what || x.title)}</span><span>${fuLate(f) ? lateTxt(f.due) : rel(f.due)}</span></span></span><button type="button" class="btn sm" data-act="furesult" data-id="${x.id}" data-fu="${esc(f.id)}">${t('logResult')}</button></div>`;
 function queryHTML(q) {
   const open = live().filter(x => isOpen(x) && !x.archived);
   const fus = []; open.forEach(x => openFus(x).forEach(f => fus.push([x, f])));
   const list = (title, rows, empty) => `<div class="qhead">${title}</div>${rows.length ? `<div class="qlist">${rows.join('')}</div>` : `<div class="muted">${empty}</div>`}`;
   const rangeLabel = (a, b) => a === b ? (a === T() ? t('today') : a === addDays(T(), 1) ? t('tomorrow') : `${wd(a)} ${fmtShort(a)}`) : `${fmtShort(a)} – ${fmtShort(b)}`;
   switch (q.type) {
-    case 'late': { const ts = sortTasks(open.filter(isLate)); const fs = fus.filter(([, f]) => fuLate(f)); return list(t('qaLate', { n: ts.length, m: fs.length }), [...ts.map(qRow), ...fs.map(([x, f]) => qFu(x, f))], t('qaNothingLate')); }
+    case 'late': { const ts = sortTasks(open.filter(isLate)); const fs = fus.filter(([, f]) => fuLate(f)); return list(t('qaLate', { n: plural(ts.length, 'tasks'), m: plural(fs.length, 'fus') }), [...ts.map(qRow), ...fs.map(([x, f]) => qFu(x, f))], t('qaNothingLate')); }
     case 'waiting': { const ts = sortTasks(open.filter(x => x.status === 'wait')); return list(t('qaWaiting', { n: ts.length }), ts.map(qRow), t('qaNone')); }
     case 'nodue': { const ts = sortTasks(open.filter(x => !x.due)); return list(t('qaNoDue', { n: ts.length }), ts.map(qRow), t('qaNone')); }
     case 'followups': {
       const by = new Map(); fus.forEach(([x, f]) => { if (!by.has(f.person_id)) by.set(f.person_id, []); by.get(f.person_id).push([x, f]); });
       open.filter(x => x.status === 'wait' && x.waiting_on).forEach(x => { if (!by.has(x.waiting_on)) by.set(x.waiting_on, []); by.get(x.waiting_on).push([x, null]); });
       const groups = [...by].sort((a, b) => b[1].length - a[1].length);
-      return `<div class="qhead">${t('qaFollow', { n: groups.length })}</div>${groups.length ? `<div class="qlist">${groups.map(([pid, items]) => { const late = items.filter(([, f]) => f && fuLate(f)).length; return `<button type="button" class="qrow" data-person="${pid}"><span class="av sm">${esc(initials(pname(pid)))}</span><span class="body"><span class="t" dir="auto">${esc(pname(pid))}</span><span class="meta"><span>${plural(items.length, 'openFu')}</span>${late ? `<span class="pill late">${t('nLate', { n: late })}</span>` : ''}</span><span class="sub" dir="auto">${esc(items.slice(0, 2).map(([x, f]) => f?.what || x.title).join(' · '))}</span></span></button>`; }).join('')}</div>` : `<div class="muted">${t('qaNone')}</div>`}`;
+      return `<div class="qhead">${t('qaFollow', { n: plural(groups.length, 'people') })}</div>${groups.length ? `<div class="qlist">${groups.map(([pid, items]) => { const late = items.filter(([, f]) => f && fuLate(f)).length; return `<button type="button" class="qrow" data-person="${pid}"><span class="av sm">${esc(initials(pname(pid)))}</span><span class="body"><span class="t" dir="auto">${esc(pname(pid))}</span><span class="meta"><span>${plural(items.length, 'openFu')}</span>${late ? `<span class="pill late">${t('nLate', { n: late })}</span>` : ''}</span><span class="sub" dir="auto">${esc(items.slice(0, 2).map(([x, f]) => f?.what || x.title).join(' · '))}</span></span></button>`; }).join('')}</div>` : `<div class="muted">${t('qaNone')}</div>`}`;
     }
-    case 'person': { const pid = q.person; const ts = sortTasks(open.filter(x => x.waiting_on === pid)); const fs = fus.filter(([, f]) => f.person_id === pid); return list(t('qaPerson', { p: esc(pname(pid)), n: ts.length + fs.length }), [...ts.map(qRow), ...fs.map(([x, f]) => qFu(x, f))], t('qaNone')) + `<button type="button" class="linkbtn" data-person="${pid}">${t('openPerson')}</button>`; }
-    case 'project': { const key = normAr(q.project); const ts = sortTasks(live().filter(x => normAr(x.project || '').includes(key) && isOpen(x))); return list(t('qaProject', { p: esc(q.project), n: ts.length }), ts.map(qRow), t('qaNone')); }
-    case 'done': { const ts = live().filter(x => x.status === 'done' && x.completed_on >= q.from && x.completed_on <= q.to).sort((a, b) => a.completed_on < b.completed_on ? 1 : -1); const nl = ts.filter(isLog).length; return list(t('qaDone', { n: ts.length - nl, m: nl, r: rangeLabel(q.from, q.to) }), ts.map(qRow), t('qaNoneDone')) + `<button type="button" class="linkbtn" data-act="chatfill">${sic('plus', 14)} ${t('qLog')}</button>`; }
+    case 'person': { const pid = q.person; const ts = sortTasks(open.filter(x => x.waiting_on === pid)); const fs = fus.filter(([, f]) => f.person_id === pid); return list(t('qaPerson', { p: esc(pname(pid)), n: plural(ts.length + fs.length, 'items') }), [...ts.map(qRow), ...fs.map(([x, f]) => qFu(x, f))], t('qaNone')) + `<button type="button" class="linkbtn" data-person="${pid}">${t('openPerson')}</button>`; }
+    case 'project': { const key = normAr(q.project); const ts = sortTasks(live().filter(x => normAr(x.project || '').includes(key) && isOpen(x))); return list(t('qaProject', { p: esc(q.project), n: plural(ts.length, 'tasks') }), ts.map(qRow), t('qaNone')); }
+    case 'done': { const ts = live().filter(x => x.status === 'done' && x.completed_on >= q.from && x.completed_on <= q.to).sort((a, b) => a.completed_on < b.completed_on ? 1 : -1); const nl = ts.filter(isLog).length; return list(t('qaDone', { n: plural(ts.length - nl, 'doneN'), m: plural(nl, 'logs'), r: rangeLabel(q.from, q.to) }), ts.map(qRow), t('qaNoneDone')) + `<button type="button" class="linkbtn" data-act="chatfill">${sic('plus', 14)} ${t('qLog')}</button>`; }
     case 'due': { const ts = sortTasks(open.filter(x => x.due && x.due >= q.from && x.due <= q.to)); const fs = fus.filter(([, f]) => f.due >= q.from && f.due <= q.to); const late = q.from <= T() && q.to >= T() ? sortTasks(open.filter(isLate)) : [];
-      return list(t('qaDue', { r: rangeLabel(q.from, q.to), n: ts.length, m: fs.length }), [...ts.map(qRow), ...fs.map(([x, f]) => qFu(x, f))], t('qaFree')) + (late.length ? `<div class="qhead sm">${t('plusLate', { n: late.length })}</div><div class="qlist">${late.map(qRow).join('')}</div>` : ''); }
+      return list(t('qaDue', { r: rangeLabel(q.from, q.to), n: plural(ts.length, 'tasks'), m: plural(fs.length, 'fus') }), [...ts.map(qRow), ...fs.map(([x, f]) => qFu(x, f))], t('qaFree')) + (late.length ? `<div class="qhead sm">${t('plusLate', { n: late.length })}</div><div class="qlist">${late.map(qRow).join('')}</div>` : ''); }
     default: return briefHTML(true);
   }
 }
@@ -1097,7 +1105,7 @@ function briefHTML(plain) {
   const hello = plain ? '' : `<b>${t(hr < 12 ? 'goodMorning' : 'hello2', { n: esc(name) })}</b><br>`;
   if (!open.length) return hello + t('briefEmpty');
   if (!today && !fusToday && !late) return hello + t('briefClear') + `<div class="chips"><button type="button" class="chip" data-act="chatfill">${sic('check', 14)}${t('qLog')}</button>${qChip('qTomorrow')}</div>`;
-  return hello + t('brief', { a: today, b: fusToday, c: late }) + `<div class="chips">${[['qToday', 1], ['qLate', late], ['qFollow', 1]].filter(([, v]) => v).map(([k]) => qChip(k)).join('')}</div>`;
+  return hello + t('brief', { a: plural(today, 'tasks'), b: plural(fusToday, 'fus'), c: plural(late, 'tasks') }) + `<div class="chips">${[['qToday', 1], ['qLate', late], ['qFollow', 1]].filter(([, v]) => v).map(([k]) => qChip(k)).join('')}</div>`;
 }
 
 /* ---------- voice ---------- */
@@ -1151,14 +1159,14 @@ const waNumber = c => { const d = String(c || '').replace(/[^\d+]/g, '').replace
 function openRemind(x, f) {
   const p = personById(f.person_id); const phone = waNumber(p?.contact);
   openSheet(t('remindTitle', { p: esc(pname(f.person_id)) }), `<div class="form"><label class="fld"><span>${t('remindMsg')}</span><textarea id="remTxt" rows="6" dir="auto">${esc(remindText(x, f))}</textarea></label>
-    <div class="save-row"><button type="button" class="btn primary block" data-act="remwa" data-id="${x.id}" data-fu="${f.id}" data-phone="${esc(/^\d{8,15}$/.test(phone) ? phone : '')}">${t('sendWhatsApp')}</button><button type="button" class="btn block" data-act="remcopy" data-id="${x.id}" data-fu="${f.id}">${t('copyMsg')}</button></div>
+    <div class="save-row"><button type="button" class="btn primary block" data-act="remwa" data-id="${x.id}" data-fu="${esc(f.id)}" data-phone="${esc(/^\d{8,15}$/.test(phone) ? phone : '')}">${t('sendWhatsApp')}</button><button type="button" class="btn block" data-act="remcopy" data-id="${x.id}" data-fu="${esc(f.id)}">${t('copyMsg')}</button></div>
     ${/^\d{8,15}$/.test(phone) ? '' : `<p class="note">${t('remindNoPhone')}</p>`}</div>`);
 }
 function logReminder(x, f) { f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: t('reminderSent'), outcome: 'reminded' }); addLog(x, 'fu_reminded', '', { person_id: f.person_id }); putTask(x); }
 
 /* ---------- full task form ---------- */
 function openTaskForm(x, pre = null) {
-  const isNew = !x; const v = x || newTask(pre ? { title: pre.title || '', due: pre.due || null, due_time: pre.time || null, recur: pre.recur || null, priority: pre.priority || 'mid', role: pre.role || 'exec', source: pre.source || '', project: pre.project || '' } : {});
+  const isNew = !x; const v = x ? (pre?.status ? { ...x, status: pre.status } : x) : newTask(pre ? { title: pre.title || '', due: pre.due || null, due_time: pre.time || null, recur: pre.recur || null, priority: pre.priority || 'mid', role: pre.role || 'exec', source: pre.source || '', project: pre.project || '' } : {});
   const rc = v.recur || null, rcDom = rc && rc.dom !== 'last' && rc.dom ? rc.dom : pd(v.due || T()).getDate(), rcDays = rc?.days?.length ? rc.days : [pd(v.due || T()).getDay()];
   const projects = [...new Set(live().map(y => (y.project || '').trim()).filter(Boolean))];
   const srcOpts = [...new Set([...recentSources(), ...people().map(p => p.name)])];
@@ -1182,7 +1190,7 @@ function openTaskForm(x, pre = null) {
         <small class="note" id="rfNote" ${rc ? '' : 'hidden'}>${t('rcNote')}</small></div>
       <div class="fld"><span>${t('fSource')} <b class="req">*</b></span><div class="src-row"><input name="source" list="srcList" value="${esc(srcLabel(v.source))}" placeholder="${esc(t('fSourcePh'))}" dir="auto"><button type="button" class="chip ${v.source === SELF ? 'on' : ''}" data-srcself>${t('srcSelf')}</button></div></div>
       <div class="fld"><span>${t('fRole')} <b class="req">*</b></span><div class="seg2" id="roleSeg">${['exec', 'follow', 'both'].map(r => `<button type="button" class="${v.role === r ? 'on' : ''}" data-role="${r}">${t('role_' + r)}</button>`).join('')}</div><input type="hidden" name="role" value="${v.role}"></div>
-      <label class="fld" id="whoBox" ${v.role === 'exec' ? 'hidden' : ''}><span>${t('fWho')} <b class="req">*</b></span><input name="who" list="pplList" value="${esc(whoNames.join('، '))}" placeholder="${esc(t('personPhMulti'))}" dir="auto"></label>
+      <label class="fld" id="whoBox" ${v.role === 'exec' ? 'hidden' : ''}><span>${t('fWho')} <b class="req">*</b></span><input name="who" list="pplList" value="${esc(whoNames.join(L() === 'ar' ? '، ' : ', '))}" placeholder="${esc(t('personPhMulti'))}" dir="auto"></label>
       ${v.status === 'done' ? '' : `<label class="fld"><span>${t('fStatus')}</span><select name="status" id="fStatus">${stOpts.map(s => `<option value="${s}" ${v.status === s ? 'selected' : ''}>${t(stKey(s))}</option>`).join('')}</select></label>`}
       <div class="grid2" id="waitBox" ${v.status === 'wait' ? '' : 'hidden'}>
         <label class="fld"><span>${t('fWaitingOn')}</span><input name="waiting_on" list="pplList" value="${esc(v.waiting_on ? pname(v.waiting_on) : '')}" dir="auto"></label>
@@ -1225,7 +1233,8 @@ function openTaskForm(x, pre = null) {
         const role = fd.get('role') || 'exec';
         const whoList = role === 'exec' ? [] : String(fd.get('who') || '').split(/[،,+؛;]/).map(s => s.trim()).filter(Boolean);
         if (role !== 'exec' && !whoList.length) { f.elements.who.focus(); return err(t('reqWho')); }
-        const tgt = x ? taskById(x.id) : v;
+        if (fd.get('status') === 'wait' && !String(fd.get('waiting_on') || '').trim()) { f.elements.waiting_on.focus(); return err(t('reqWaitingOn')); }
+        const tgt = (x && taskById(x.id)) || v;
         const prevDue = tgt.due || null, prevSt = tgt.status;
         tgt.title = title; tgt.details = (fd.get('details') || '').trim();
         tgt.due = noDue && !recur ? null : dueV; tgt.priority = fd.get('priority');
@@ -1237,7 +1246,7 @@ function openTaskForm(x, pre = null) {
         tgt.source = /^(أنا|انا|me|self)$/i.test(srcRaw) || srcRaw === t('srcSelf') ? SELF : srcRaw;
         tgt.steps_total = Math.max(0, Math.min(50, parseInt(fd.get('steps_total') || '0', 10) || 0)); tgt.steps_done = Math.min(tgt.steps_done || 0, tgt.steps_total);
         tgt.notes = (fd.get('notes') || '').trim();
-        if (tgt.status === 'wait') { tgt.waiting_on = getOrCreatePerson(fd.get('waiting_on')); tgt.waiting_what = fd.get('waiting_what') || 'reply'; } else tgt.waiting_on = null;
+        if (tgt.status === 'wait') { tgt.waiting_on = getOrCreatePerson(fd.get('waiting_on')); if (!tgt.waiting_on) tgt.status = prevSt === 'wait' ? 'prog' : prevSt; tgt.waiting_what = fd.get('waiting_what') || 'reply'; } else tgt.waiting_on = null;
         whoList.forEach(nm => {
           const pid = getOrCreatePerson(nm); if (!pid || (tgt.followups || []).some(fu => fu.person_id === pid && fu.status === 'open')) return;
           const due = tgt.due && tgt.due > T() ? (diffDays(tgt.due, T()) > 1 ? addWorkdays(tgt.due, -1) : tgt.due) : addWorkdays(T(), 1);
@@ -1300,23 +1309,28 @@ function openLogForm(x, pre = null) {
 }
 
 /* ---------- complete ---------- */
-function openComplete(x) {
+const fresh = x => taskById(x.id) || x;
+const freshFu = (x, f) => (fresh(x).followups || []).find(y => y.id === f.id) || f;
+function openComplete(x0) {
+  const x = x0;
   openSheet(t('completeTask'), `<form id="cForm" class="form"><p class="ctx" dir="auto">${esc(x.title)}</p>
       <label class="fld"><span>${t('completedOn')}</span><input type="date" name="d" value="${T()}" max="${T()}" required></label>
       <label class="fld"><span>${t('result')} <em>${t('optional')}</em></span><textarea name="r" rows="3" dir="auto" placeholder="${esc(t('resultPh'))}" autofocus></textarea></label>
       <div class="save-row"><button class="btn primary block" type="submit">${ic.check}${t('complete')}</button></div></form>`, {
     onMount: sh => sh.querySelector('#cForm').onsubmit = e => {
-      e.preventDefault(); const fd = new FormData(e.target);
+      e.preventDefault(); const fd = new FormData(e.target); const x = fresh(x0); if (!isOpen(x)) { closeSheet(true); return; }
+      const prev = structuredClone(x);
       x.status = 'done'; x.completed_on = validDate(fd.get('d')) || T(); x.result = (fd.get('r') || '').trim(); addLog(x, 'completed', x.result);
       const nx = spawnNext(x);
-      putTask(x); closeSheet(true); toast(t('completedToast') + (nx ? ' · ' + t('nextOn', { d: rel(nx.due) }) : '')); askCloseFus(x);
+      const undo = () => { putTask(prev); if (nx) { nx.deleted = true; putTask(nx); } };
+      putTask(x); closeSheet(true); toast(t('completedToast') + (nx ? ' · ' + t('nextOn', { d: rel(nx.due) }) : ''), undo); askCloseFus(x, undo);
     }
   });
 }
 
 /* ---------- follow-ups ---------- */
-function openFuAdd(x, f) {
-  const isNew = !f;
+function openFuAdd(x0, f0) {
+  const isNew = !f0; const x = x0, f = f0;
   openSheet(isNew ? t('addFu') : t('editFu'), `<form id="fuForm" class="form" autocomplete="off"><p class="ctx" dir="auto">${esc(x.title)}</p>
       <label class="fld"><span>${isNew ? t('personMulti') : t('person')}</span><input name="p" list="pplList2" required dir="auto" value="${esc(f ? pname(f.person_id) : '')}" placeholder="${esc(isNew ? t('personPhMulti') : t('personPh'))}" autofocus></label>
       <label class="fld"><span>${t('fuWhat')}</span><input name="w" dir="auto" value="${esc(f?.what || '')}" placeholder="${esc(t('fuWhatPh'))}"></label>
@@ -1328,12 +1342,12 @@ function openFuAdd(x, f) {
       const fm = sh.querySelector('#fuForm');
       sh.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => { fm.elements.d.value = b.dataset.quick; sh.querySelectorAll('[data-quick]').forEach(y => y.classList.remove('on')); b.classList.add('on'); });
       fm.onsubmit = e => {
-        e.preventDefault(); const fd = new FormData(fm);
+        e.preventDefault(); const fd = new FormData(fm); const x = fresh(x0), f = f0 && freshFu(x0, f0);
         if (isNew) {
           const ids = [...new Set(String(fd.get('p') || '').split(/[،,+؛;]/).map(n => getOrCreatePerson(n)).filter(Boolean))]; if (!ids.length) return;
           ids.forEach(pid => { x.followups.push({ id: uuid(), person_id: pid, what: (fd.get('w') || '').trim(), due: validDate(fd.get('d')) || nextWorkday(), time: /^\d{2}:\d{2}$/.test(fd.get('tm') || '') ? fd.get('tm') : null, status: 'open', created_at: nowISO(), closed_on: null, log: [] }); addLog(x, 'fu_added', '', { person_id: pid }); });
         }
-        else { const pid = getOrCreatePerson(fd.get('p')); if (!pid) return; f.person_id = pid; f.what = (fd.get('w') || '').trim(); f.due = validDate(fd.get('d')) || f.due; f.time = /^\d{2}:\d{2}$/.test(fd.get('tm') || '') ? fd.get('tm') : null; }
+        else { const pid = getOrCreatePerson(fd.get('p')); if (!pid) return; const d0 = validDate(fd.get('d')); if (d0 && d0 < T() && f.status === 'open') { toast(t('pastDate')); return; } f.person_id = pid; f.what = (fd.get('w') || '').trim(); f.due = validDate(fd.get('d')) || f.due; f.time = /^\d{2}:\d{2}$/.test(fd.get('tm') || '') ? fd.get('tm') : null; }
         putTask(x); closeSheet(true); toast(t('saved'));
       };
     }
@@ -1344,18 +1358,20 @@ function openFuResult(x, f) {
   openSheet(t('fuResult'), `<div class="fu-head"><span class="av">${esc(initials(pname(f.person_id)))}</span><div><b dir="auto">${esc(pname(f.person_id))}</b><div class="sub" dir="auto">${esc(f.what || x.title)}</div></div></div>
       <label class="fld"><span>${t('whatHappened')} <em>${t('optional')}</em></span><textarea id="fuNote" rows="2" dir="auto" placeholder="${esc(t('whatHappenedPh'))}"></textarea></label>
       <div class="save-row"><button type="button" class="btn ok block" data-act="fudone">${ic.check}${t('fuDone')}</button><button type="button" class="btn block" data-act="funotyet">${t('fuNotYet')}</button></div>
-      <div id="fuNext" hidden><div class="lab">${t('nextFu')}</div><div class="opts">${dateChips().filter(([, v]) => v > T()).map(([l, v]) => `<button type="button" class="chip" data-act="funext" data-v="${v}">${l}</button>`).join('')}<label class="chip datein">${sic('cal', 15)}<input type="date" id="fuNextIn" aria-label="${esc(t('pickDate'))}"></label></div></div>`, {
+      <div id="fuNext" hidden><div class="lab">${t('nextFu')}</div><div class="opts">${dateChips().filter(([, v]) => v > T()).map(([l, v]) => `<button type="button" class="chip" data-act="funext" data-v="${v}">${l}</button>`).join('')}<label class="chip datein">${sic('cal', 15)}<input type="date" id="fuNextIn" min="${addDays(T(), 1)}" aria-label="${esc(t('pickDate'))}"></label></div></div>`, {
     onMount: sh => { const di = sh.querySelector('#fuNextIn'); di.onchange = () => validDate(di.value) && fuAgain(x, f, di.value); }
   });
   UI.fuCtx = { x, f };
 }
-function fuDone(x, f) {
+function fuDone(x0, f0) {
+  const x = fresh(x0), f = freshFu(x0, f0); if (f.status !== 'open') { closeSheet(true); return; }
   const note = ($('#fuNote')?.value || '').trim();
   f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: note, outcome: 'done' });
   f.status = 'done'; f.closed_on = T(); addLog(x, 'fu_done', note, { person_id: f.person_id });
   putTask(x); closeSheet(true); toast(t('fuLogged'));
 }
-function fuAgain(x, f, d) {
+function fuAgain(x0, f0, d) {
+  const x = fresh(x0), f = freshFu(x0, f0); if (!validDate(d) || d <= T()) { toast(t('pastDate')); return; }
   const note = ($('#fuNote')?.value || '').trim();
   f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: note, outcome: 'again', next: d });
   f.due = d; addLog(x, 'fu_again', note, { person_id: f.person_id, due: d });
@@ -1414,7 +1430,7 @@ function routeHash() {
   closeAllLayers(); openTask(m[1]);
 }
 window.addEventListener('hashchange', routeHash);
-if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { const id = e.data && e.data.openTask; if (id && taskById(id)) { closeAllLayers(); openTask(id); } });
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { const id = e.data && e.data.openTask; if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return; if (taskById(id)) { closeAllLayers(); openTask(id); } else history.replaceState(null, '', location.pathname + location.search + '#t=' + id); });
 
 /* ---------- people ---------- */
 function openPersonForm(p) {
@@ -1429,8 +1445,8 @@ function openPersonForm(p) {
     onMount: sh => sh.querySelector('#pForm').onsubmit = e => {
       e.preventDefault(); const fd = new FormData(e.target); const name = (fd.get('name') || '').trim().replace(/\s+/g, ' '); if (!name) return;
       const key = nameTokens(name).join(' ');
-      if (people().some(q => q !== p && nameTokens(q.name).join(' ') === key)) { sh.querySelector('#pErr').hidden = false; return; }
-      const tg = p || newPerson(name);
+      if (people().some(q => q.id !== p?.id && nameTokens(q.name).join(' ') === key)) { sh.querySelector('#pErr').hidden = false; return; }
+      const tg = (p && (personById(p.id) || p)) || newPerson(name);
       tg.name = name; tg.org = (fd.get('org') || '').trim(); tg.contact = (fd.get('contact') || '').trim(); tg.notes = (fd.get('notes') || '').trim();
       putPerson(tg); closeSheet(true); toast(t('saved')); if (isNew) openPerson(tg.id);
     }
@@ -1463,8 +1479,10 @@ function pushLayer(build) {
     const b = el.querySelector('.layer-b'); if (b) b.scrollTop = sc;
   } };
   Lr.rerender();
+  Lr.opener = document.activeElement; // restored on close for keyboard / screen-reader users
   $('#layers').appendChild(el); UI.layers.push(Lr);
   $('#layerBackdrop').classList.add('on');
+  el.tabIndex = -1; el.focus({ preventScroll: true });
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('on')));
   return Lr;
 }
@@ -1472,6 +1490,7 @@ function popLayer() {
   const Lr = UI.layers.pop(); if (!Lr) return;
   Lr.el.classList.remove('on'); setTimeout(() => Lr.el.remove(), 280);
   if (!UI.layers.length) $('#layerBackdrop').classList.remove('on');
+  try { if (Lr.opener && Lr.opener.isConnected) Lr.opener.focus({ preventScroll: true }); } catch { }
 }
 function closeAllLayers() { while (UI.layers.length) { const Lr = UI.layers.pop(); Lr.el.remove(); } $('#layerBackdrop')?.classList.remove('on'); }
 $('#layerBackdrop').addEventListener('click', () => popLayer());
@@ -1490,7 +1509,7 @@ function openTask(id) {
       <div class="chips top">${statusPill(x)}${x.priority === 'hi' ? `<span class="pill hi">${t('prioHi')}</span>` : ''}${x.project ? `<span class="pill" dir="auto">${esc(x.project)}</span>` : ''}${x.archived ? `<span class="pill">${t('archived')}</span>` : ''}${x.ai?.st === 'done' ? `<button type="button" class="pill ai" data-act="aiundo" data-id="${x.id}">${sic('spark', 13)}${t('aiPill')} · ${t('undo')}</button>` : ''}</div>
       <h2 class="d-title" dir="auto">${esc(x.title)}</h2>
       ${x.details ? `<p class="d-text" dir="auto">${esc(x.details)}</p>` : ''}
-      ${x.status === 'wait' && x.waiting_on ? `<div class="waitbox">${sic('clock', 16)}<span>${t('waitingFrom', { w: t('w_' + x.waiting_what), p: `<b dir="auto">${esc(pname(x.waiting_on))}</b>` })}</span></div>` : ''}
+      ${x.status === 'wait' && x.waiting_on ? `<div class="waitbox">${sic('clock', 16)}<span>${t('waitingFrom', { w: t('w_' + (x.waiting_what || 'reply')), p: `<b dir="auto">${esc(pname(x.waiting_on))}</b>` })}</span></div>` : ''}
       ${x.status === 'done' ? `<div class="donebox"><b>${t('doneOn', { d: fmt(x.completed_on || T()) })}</b>${x.result ? `<p dir="auto">${esc(x.result)}</p>` : ''}</div>` : ''}
       <div class="kv num">
         <div><small>${t('fDue')}</small><b>${x.due ? `${wd(x.due)} ${fmtShort(x.due)}${x.due_time ? ` · <span class="num">${fmtTime(x.due_time)}</span>` : ''}` : t('noDue')}</b>${isLate(x) ? `<span class="pill late">${lateTxt(x.due)}</span>` : ''}</div>
@@ -1504,8 +1523,8 @@ function openTask(id) {
         <div class="st-row">${['todo', 'prog', 'wait', 'hold'].map(s => `<button type="button" class="chip ${x.status === s ? 'on' : ''}" data-act="setst" data-id="${x.id}" data-v="${s}">${t(stKey(s))}</button>`).join('')}</div>` : `<div class="save-row"><button type="button" class="btn block" data-act="reopen" data-id="${x.id}">${sic('reopen', 18)}${t('reopen')}</button></div>`}
       <div class="sec-h"><h3>${t('followups')}</h3><span class="cnt">${openFus(x).length}</span><span class="grow"></span><button type="button" class="btn sm ghost" data-act="addfu" data-id="${x.id}">${sic('plus', 16)}${t('add')}</button></div>
       <div class="box">${fus.length ? fus.map(f => `<div class="fu ${f.status !== 'open' ? 'closed' : ''}"><div class="fu-top"><span class="av">${esc(initials(pname(f.person_id)))}</span><div class="body"><div class="t" dir="auto">${esc(pname(f.person_id))}</div><div class="meta">${f.what ? `<span dir="auto">${esc(f.what)}</span>` : ''}${f.status === 'open' ? `<span class="pill ${fuLate(f) ? 'late' : f.due <= T() ? 'wait' : ''}">${fuLate(f) ? lateTxt(f.due) : rel(f.due)}${f.time ? ' · ' + fmtTime(f.time) : ''}</span>` : `<span class="pill done">${t('fuClosed', { d: fmtShort(f.closed_on || T()) })}</span>`}</div></div>
-          ${f.status === 'open' && open ? `<button type="button" class="iconbtn sm" data-act="remind" data-id="${x.id}" data-fu="${f.id}" aria-label="${esc(t('remind'))}" title="${esc(t('remind'))}">${sic('send', 17)}</button><button type="button" class="btn sm" data-act="furesult" data-id="${x.id}" data-fu="${f.id}">${t('logResult')}</button>` : ''}<button type="button" class="iconbtn sm" data-act="fumenu" data-id="${x.id}" data-fu="${f.id}" aria-label="${esc(t('edit'))}">${sic('edit', 16)}</button></div>
-          ${(f.log || []).length ? `<div class="fu-log">${f.log.map(l => `<div><span class="when num">${fmtShort(l.date)}</span> <span dir="auto">${esc(l.text || (l.outcome === 'done' ? t('fuDone') : t('fuNotYet')))}</span></div>`).join('')}</div>` : ''}</div>`).join('') : `<div class="fu muted">${t('noFollowups')}</div>`}</div>
+          ${f.status === 'open' && open ? `<button type="button" class="iconbtn sm" data-act="remind" data-id="${x.id}" data-fu="${esc(f.id)}" aria-label="${esc(t('remind'))}" title="${esc(t('remind'))}">${sic('send', 17)}</button><button type="button" class="btn sm" data-act="furesult" data-id="${x.id}" data-fu="${esc(f.id)}">${t('logResult')}</button>` : ''}<button type="button" class="iconbtn sm" data-act="fumenu" data-id="${x.id}" data-fu="${esc(f.id)}" aria-label="${esc(t('edit'))}">${sic('edit', 16)}</button></div>
+          ${(f.log || []).length ? `<div class="fu-log">${f.log.map(l => `<div><span class="when num">${fmtShort(l.date)}</span> <span dir="auto">${esc(fuLogText(l))}</span></div>`).join('')}</div>` : ''}</div>`).join('') : `<div class="fu muted">${t('noFollowups')}</div>`}</div>
       ${state.mode === 'cloud' ? (() => { const fs = filesOfTask(x.id); return `<div class="sec-h"><h3>${t('filesTitle')}</h3>${fs.length ? `<span class="cnt">${fs.length}</span>` : ''}<span class="grow"></span><button type="button" class="btn sm ghost" data-act="upload" data-task="${x.id}">${sic('clip', 16)}${t('attach')}</button></div>
       <div class="stack fstack">${uploadsBox({ task: x.id })}${fs.length ? fs.map(f => fileRow(f, { ctx: 'task' })).join('') : `<div class="box"><div class="fu muted">${t('noFilesTask')}</div></div>`}</div>`; })() : ''}
       <div class="sec-h"><h3>${t('progressLog')}</h3></div>
@@ -1549,7 +1568,7 @@ function openPerson(id) {
       ${state.mode === 'cloud' ? (() => { const fs = filesOfPerson(p.id); return `<div class="sec-h"><h3>${t('filesTitle')}</h3>${fs.length ? `<span class="cnt">${fs.length}</span>` : ''}<span class="grow"></span><button type="button" class="btn sm ghost" data-act="upload" data-person="${p.id}">${sic('clip', 16)}${t('attach')}</button></div>
       <div class="stack fstack">${uploadsBox({ person: p.id })}${fs.map(f => fileRow(f, { ctx: 'person' })).join('')}</div>`; })() : ''}
       <div class="sec-h"><h3>${t('contactHistory')}</h3></div>
-      <div class="box">${hist.length ? `<ul class="tl">${hist.map(({ x, l, f }) => `<li class="k"><small class="num">${fmtShort(l.date)}</small><span dir="auto">${esc(l.text || (l.outcome === 'done' ? t('fuDone') : t('fuNotYet')))}</span><button type="button" class="linkbtn" data-open="${x.id}" dir="auto">${esc(x.title)}</button></li>`).join('')}</ul>` : `<div class="fu muted">${t('noContact')}</div>`}</div>
+      <div class="box">${hist.length ? `<ul class="tl">${hist.map(({ x, l, f }) => `<li class="k"><small class="num">${fmtShort(l.date)}</small><span dir="auto">${esc(fuLogText(l))}</span><button type="button" class="linkbtn" data-open="${x.id}" dir="auto">${esc(x.title)}</button></li>`).join('')}</ul>` : `<div class="fu muted">${t('noContact')}</div>`}</div>
       <div class="danger-row"><button type="button" class="btn sm ghost danger" data-act="delperson" data-id="${p.id}">${sic('trash', 16)}${t('delete')}</button></div>
     </div>`;
   });
@@ -1564,7 +1583,8 @@ function harvest(ym) {
   const done = all.filter(x => !isLog(x) && x.status === 'done' && (x.completed_on || '').startsWith(ym)).sort(byDate);
   const logs = all.filter(x => isLog(x) && (x.completed_on || '').startsWith(ym)).sort(byDate);
   const withDue = done.filter(x => x.due), onTime = withDue.filter(x => x.completed_on <= x.due);
-  const open = sortTasks(all.filter(x => isOpen(x) && !x.archived));
+  const endOfYm = lastOfMonth(ym + '-01'), past = endOfYm < T();
+  const open = sortTasks(all.filter(x => !x.archived && !isLog(x) && (past ? (x.created_at || '').slice(0, 10) <= endOfYm && (isOpen(x) || (x.status === 'done' && (x.completed_on || '') > endOfYm)) : isOpen(x))));
   let fuClosed = 0; all.forEach(x => (x.followups || []).forEach(f => { if (f.status === 'done' && (f.closed_on || '').startsWith(ym)) fuClosed++; }));
   const proj = {}; [...done, ...logs].forEach(x => { const p = (x.project || '').trim(); proj[p] = (proj[p] || 0) + 1; });
   const byProject = Object.entries(proj).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n).slice(0, 8);
@@ -1582,16 +1602,16 @@ function snapshot(ym) {
   const h = harvest(ym), sel = selOf(ym);
   const item = (x, kind) => ({
     kind, title: x.title, project: x.project || '', priority: x.priority, status: kind === 'open' ? stKey(x.status) : '', due: x.due, completed_on: x.completed_on,
-    onTime: !!(x.due && x.completed_on && x.completed_on <= x.due), result: x.result || '', details: (x.details || '').slice(0, 600), update: kind === 'open' ? lastNote(x) : '',
+    onTime: !!(x.due && x.completed_on && x.completed_on <= x.due), result: (x.result || '').slice(0, 600), details: (x.details || '').slice(0, 600), update: kind === 'open' ? lastNote(x) : '',
     steps_done: x.steps_done || 0, steps_total: x.steps_total || 0,
     people: [...new Set([x.waiting_on, ...(x.followups || []).map(f => f.person_id)].filter(Boolean).map(pname))].slice(0, 6),
     files: filesOfTask(x.id).map(f => ({ name: f.name, kind: kindOf(f) })),
   });
   return { v: 1, lang: L(), period: ym, generated_at: nowISO(), owner: { name: state.profile.display_name || '', title: state.profile.job_title || '' }, kpis: h.kpis, byProject: h.byProject,
-    items: [...h.done.filter(x => sel.has(x.id)).map(x => item(x, 'done')), ...h.logs.filter(x => sel.has(x.id)).map(x => item(x, 'log')), ...h.open.filter(x => sel.has(x.id)).map(x => item(x, 'open'))] };
+    generated_on: T(), items: [...h.done.filter(x => sel.has(x.id)).map(x => item(x, 'done')), ...h.logs.filter(x => sel.has(x.id)).map(x => item(x, 'log')), ...h.open.filter(x => sel.has(x.id)).map(x => item(x, 'open'))].slice(0, 300) };
 }
 function openHarvest(ym = thisYM()) {
-  UI.hym = ym;
+  UI.hym = ym; UI.hsel = null; // recompute the default selection: items completed since the last visit must be included
   pushLayer(() => {
     const m = UI.hym, h = harvest(m), sel = selOf(m);
     const rate = h.kpis.onTimeRate == null ? '—' : Math.round(h.kpis.onTimeRate * 100) + '%';
@@ -1640,7 +1660,7 @@ function openShareSheet() {
   const snap = snapshot(UI.hym || thisYM());
   if (!snap.items.length) return toast(t('nothingSelected'), null, 'err');
   UI.shareExp = 30;
-  openSheet(t('shareTitle'), `<div class="form" id="shareBox"><p class="ctx" style="font-weight:500">${t('shareExplain', { n: snap.items.length })}</p>
+  openSheet(t('shareTitle'), `<div class="form" id="shareBox"><p class="ctx" style="font-weight:500">${t('shareExplain', { n: plural(snap.items.length, 'items') })}</p>
     <div class="fld"><span>${t('expiry')}</span><div class="seg2">${[[7, 'exp7'], [30, 'exp30'], [0, 'expNone']].map(([v, l]) => `<button type="button" class="${v === 30 ? 'on' : ''}" data-exp="${v}">${t(l)}</button>`).join('')}</div></div>
     <div class="save-row"><button type="button" class="btn primary block" data-act="createshare">${sic('link', 18)}${t('createLink')}</button></div></div>`, {
     onMount: sh => sh.querySelectorAll('[data-exp]').forEach(b => b.onclick = () => { UI.shareExp = +b.dataset.exp; sh.querySelectorAll('[data-exp]').forEach(y => y.classList.toggle('on', y === b)); })
@@ -1653,7 +1673,7 @@ async function createShare(btn) {
   const token = newToken();
   const exp = UI.shareExp ? new Date(Date.now() + UI.shareExp * 864e5).toISOString() : null;
   const { error } = await sb.from('shares').insert({ token, title: `${t('rpTitle', { m: monthName(L(), snap.period) })} — ${snap.owner.name}`.slice(0, 200), period: snap.period, payload: snap, expires_at: exp });
-  if (error) { btn.disabled = false; console.warn(error); return toast(t('shareFail'), null, 'err'); }
+  if (error) { btn.disabled = false; console.warn(error); return toast(error.code === '23514' ? t('shareTooBig') : t('shareFail'), null, 'err'); }
   const url = shareUrl(token);
   const box = $('#shareBox'); if (!box) return;
   box.innerHTML = `<p class="ctx">${sic('check', 16)} ${t('linkReady')}</p><div class="linkbox" dir="ltr">${esc(url)}</div>
@@ -1668,7 +1688,7 @@ function openShares() {
     const body = list == null ? `<div class="pv-wait"><span class="spin"></span></div>` : !list.length ? `<div class="empty small"><p>${t('sharesEmpty')}</p></div>` : `<div class="stack">${list.map(sh => {
       const expired = sh.expires_at && sh.expires_at < nowISO();
       const st = sh.revoked ? `<span class="pill">${t('revokedSt')}</span>` : expired ? `<span class="pill">${t('expired')}</span>` : `<span class="pill done">${t('active')}</span>`;
-      return `<div class="box share-row"><div class="t" dir="auto">${esc(sh.title)}</div><div class="meta">${st}<span class="num">${fmtShort(localDay(sh.created_at))}</span><span>${t('views', { n: sh.views })}</span><span>${sh.expires_at ? t('expiresOn', { d: fmtShort(localDay(sh.expires_at)) }) : t('expNone')}</span></div>
+      return `<div class="box share-row"><div class="t" dir="auto">${esc(sh.title)}</div><div class="meta">${st}<span class="num">${fmtShort(localDay(sh.created_at))}</span><span>${t('views', { n: plural(sh.views | 0, 'views') })}</span><span>${sh.expires_at ? t('expiresOn', { d: fmtShort(localDay(sh.expires_at)) }) : t('expNone')}</span></div>
         ${!sh.revoked && !expired ? `<div class="row"><button type="button" class="btn sm" data-act="copylink" data-url="${esc(shareUrl(sh.token))}">${t('copy')}</button><a class="btn sm ghost" href="${esc(shareUrl(sh.token))}" target="_blank" rel="noopener">${t('previewLink')}</a><span class="grow"></span><button type="button" class="btn sm ghost danger" data-act="revokeshare" data-sid="${sh.id}">${t('revoke')}</button></div>` : ''}</div>`;
     }).join('')}</div>`;
     return topBar(t('sharesTitle')) + `<div class="layer-b">${body}</div>`;
@@ -1707,16 +1727,30 @@ async function importBackup(file) {
   if (!d || d.app !== 'rafeeq' || !Array.isArray(d.tasks)) { toast(t('importBad'), null, 'err'); return; }
   const conv = d.version === 2 ? { people: d.people || [], tasks: d.tasks || [], files: state.mode === 'cloud' ? (d.files || []) : [] } : convertV1(d);
   const okId = v => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);
-  conv.tasks = conv.tasks.filter(x => x && okId(x.id) && typeof x.title === 'string').map(x => newTask({ ...x, kind: x.kind === 'log' ? 'log' : 'task', status: ['todo', 'prog', 'wait', 'hold', 'done', 'cancelled'].includes(x.status) ? x.status : 'todo', priority: ['hi', 'mid', 'lo'].includes(x.priority) ? x.priority : 'mid', role: ['exec', 'follow', 'both'].includes(x.role) ? x.role : 'exec', waiting_what: ['reply', 'decision', 'approval'].includes(x.waiting_what) ? x.waiting_what : 'reply', due: validDate(x.due), completed_on: validDate(x.completed_on), title: String(x.title).slice(0, 500), followups: Array.isArray(x.followups) ? x.followups : [], log: Array.isArray(x.log) ? x.log : [], recur: cleanRecur(x.recur) }));
-  conv.people = conv.people.filter(p => p && okId(p.id) && typeof p.name === 'string' && p.name.trim()).map(p => ({ ...newPerson(p.name.slice(0, 200)), ...p, name: p.name.trim().slice(0, 200) }));
-  conv.files = (conv.files || []).filter(f => f && okId(f.id) && typeof f.name === 'string').map(f => newFile({ ...f, name: String(f.name).slice(0, 300) }));
-  confirmSheet(t('importQ', { t: conv.tasks.length, p: conv.people.length }), t('importAdd'), () => {
+  const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+  const iso = v => typeof v === 'string' && !isNaN(Date.parse(v)) ? v.slice(0, 40) : nowISO();
+  const hhmm = v => /^([01]\d|2[0-3]):[0-5]\d$/.test(v || '') ? v : null;
+  const int = (v, lo, hi, dflt) => { const n = parseInt(v, 10); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : dflt; };
+  const fuLog = l => ({ id: okId(l?.id) ? l.id : uuid(), at: iso(l?.at), date: validDate(l?.date) || T(), text: str(l?.text, 1000), outcome: ['done', 'again', 'closed_with_task', 'person_deleted'].includes(l?.outcome) ? l.outcome : 'done', ...(validDate(l?.next) ? { next: l.next } : {}) });
+  const fu = f => ({ id: okId(f.id) ? f.id : uuid(), person_id: f.person_id, what: str(f.what, 300), due: validDate(f.due), time: hhmm(f.time), status: f.status === 'done' ? 'done' : 'open', created_at: iso(f.created_at), closed_on: validDate(f.closed_on), log: (Array.isArray(f.log) ? f.log : []).slice(0, 200).map(fuLog) });
+  const tlog = e => ({ id: okId(e?.id) ? e.id : uuid(), at: iso(e?.at), kind: str(e?.kind, 20) || 'edited', text: str(e?.text, 2000), data: e?.data && typeof e.data === 'object' && !Array.isArray(e.data) ? e.data : {} });
+  conv.tasks = conv.tasks.filter(x => x && okId(x.id) && typeof x.title === 'string').map(x => newTask({
+    ...x, kind: x.kind === 'log' ? 'log' : 'task', status: ['todo', 'prog', 'wait', 'hold', 'done', 'cancelled'].includes(x.status) ? x.status : 'todo', priority: ['hi', 'mid', 'lo'].includes(x.priority) ? x.priority : 'mid',
+    role: ['exec', 'follow', 'both'].includes(x.role) ? x.role : 'exec', waiting_what: ['reply', 'decision', 'approval'].includes(x.waiting_what) ? x.waiting_what : 'reply', waiting_on: okId(x.waiting_on) ? x.waiting_on : null,
+    due: validDate(x.due), due_time: hhmm(x.due_time), remind_min: x.remind_min == null ? null : int(x.remind_min, -1, 1440, null), completed_on: validDate(x.completed_on), created_at: iso(x.created_at), client_ts: nowISO(),
+    title: String(x.title).slice(0, 500), details: str(x.details, 20000), notes: str(x.notes, 20000), result: str(x.result, 5000), project: str(x.project, 200), source: str(x.source, 200),
+    steps_done: int(x.steps_done, 0, 50, 0), steps_total: int(x.steps_total, 0, 50, 0), archived: !!x.archived, deleted: !!x.deleted, ai: {},
+    followups: (Array.isArray(x.followups) ? x.followups : []).filter(f => f && okId(f.person_id)).slice(0, 100).map(fu), log: (Array.isArray(x.log) ? x.log : []).slice(0, 500).map(tlog), recur: cleanRecur(x.recur),
+  }));
+  conv.people = conv.people.filter(p => p && okId(p.id) && typeof p.name === 'string' && p.name.trim()).map(p => ({ ...newPerson(p.name.slice(0, 200)), id: p.id, org: str(p.org, 200), contact: str(p.contact, 200), notes: str(p.notes, 5000), deleted: !!p.deleted, created_at: iso(p.created_at) }));
+  conv.files = (conv.files || []).filter(f => f && okId(f.id) && typeof f.name === 'string' && /^[\w-]{10,200}$/.test(f.drive_id || '')).map(f => newFile({ id: f.id, drive_id: f.drive_id, name: String(f.name).slice(0, 300), mime: str(f.mime, 100), size: int(f.size, 0, 1e12, 0), task_id: okId(f.task_id) ? f.task_id : null, person_id: okId(f.person_id) ? f.person_id : null, note: str(f.note, 1000), deleted: !!f.deleted, created_at: iso(f.created_at) }));
+  confirmSheet(t('importQ', { t: plural(conv.tasks.length, 'tasks'), p: plural(conv.people.length, 'people') }), t('importAdd'), () => {
     const haveT = new Set(state.tasks.map(x => x.id)), haveP = new Set(state.people.map(p => p.id));
     const tasks = state.tasks.concat(conv.tasks.filter(x => !haveT.has(x.id)));
     const ppl = state.people.concat(conv.people.filter(p => !haveP.has(p.id)));
     const haveF = new Set(state.files.map(f => f.id));
     const fls = (conv.files || []).length ? state.files.concat(conv.files.filter(f => !haveF.has(f.id))) : undefined;
-    bulkReplace({ tasks, people: ppl, files: fls }); toast(t('imported'));
+    bulkReplace({ tasks, people: ppl, files: fls, added: { tasks: conv.tasks.filter(x => !haveT.has(x.id)).map(x => x.id), people: conv.people.filter(p => !haveP.has(p.id)).map(p => p.id), files: (conv.files || []).filter(f => !haveF.has(f.id)).map(f => f.id) } }); toast(t('imported'));
   }, false);
 }
 
@@ -1770,7 +1804,7 @@ document.addEventListener('click', async e => {
       case 'skiprec': { if (!x?.recur) return; let nd = recurNext(x.recur, x.due || T()), g = 0; while (nd && nd <= T() && g++ < 400) nd = recurNext(x.recur, nd); if (!nd) return; addLog(x, 'skipped', '', { from: x.due, to: nd }); x.due = nd; openFus(x).forEach(f => { f.due = diffDays(nd, T()) > 1 ? addWorkdays(nd, -1) : nd; }); putTask(x); return toast(t('skippedTo', { d: rel(nd) })); }
       case 'chatfill': { if (!$('#chatIn')) openChat(); const ta = $('#chatIn'); if (ta) { ta.value = t('logStarter'); autoGrow(ta); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
       case 'ansmatch': { const pp = pending(); if (pp && pp.m.k === 'match') pp.d.closeTask = el.dataset.v === 'yes' ? pp.d.match : null; return renderChat(); }
-      case 'closefus': { if (x && openFus(x).length) { openFus(x).forEach(f => { f.status = 'done'; f.closed_on = T(); f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: t('closedWithTask'), outcome: 'done' }); }); putTask(x); toast(t('fusClosed')); } el.disabled = true; el.closest('.ask')?.remove(); return; }
+      case 'closefus': { if (x && openFus(x).length) { openFus(x).forEach(f => { f.status = 'done'; f.closed_on = T(); f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: '', outcome: 'closed_with_task' }); }); putTask(x); toast(t('fusClosed')); } el.disabled = true; el.closest('.ask')?.remove(); return; }
       case 'newperson': return openPersonForm();
       case 'profile': return openProfile();
       case 'closesheet': return closeSheet();
@@ -1779,7 +1813,7 @@ document.addEventListener('click', async e => {
       case 'postpone': return postpone(id);
       case 'complete': return x && openComplete(x);
       case 'reopen': if (x) { addLog(x, 'reopened', '', { prev: x.completed_on }); x.status = 'prog'; x.completed_on = null; putTask(x); toast(t('reopened')); } return;
-      case 'setst': if (x) { const needWho = el.dataset.v === 'wait' && !x.waiting_on; setStatus(x, el.dataset.v); if (needWho) openTaskForm(x); } return;
+      case 'setst': if (x) { if (el.dataset.v === 'wait' && !x.waiting_on) openTaskForm(x, { status: 'wait' }); else setStatus(x, el.dataset.v); } return;
       case 'edittask': return x && (isLog(x) ? openLogForm(x) : openTaskForm(x));
       case 'archive': if (x) { x.archived = !x.archived; addLog(x, x.archived ? 'archived' : 'unarchived'); putTask(x); toast(x.archived ? t('archivedToast') : t('unarchivedToast')); } return;
       case 'deltask': return x && confirmSheet(t(isLog(x) ? 'delLogQ' : 'delTaskQ'), t('delete'), () => { const prev = structuredClone(x); x.deleted = true; putTask(x); popLayer(); toast(t('deleted'), () => putTask(prev)); });
@@ -1792,7 +1826,16 @@ document.addEventListener('click', async e => {
       case 'funotyet': { const b = $('#fuNext'); if (b) b.hidden = false; return; }
       case 'funext': return UI.fuCtx && fuAgain(UI.fuCtx.x, UI.fuCtx.f, el.dataset.v);
       case 'editperson': { const p = personById(id); return p && openPersonForm(p); }
-      case 'delperson': { const p = personById(id); return p && confirmSheet(t('delPersonQ'), t('delete'), () => { p.deleted = true; putPerson(p); popLayer(); toast(t('deleted')); }); }
+      case 'delperson': {
+        const p = personById(id); if (!p) return;
+        const refs = live().filter(x => isOpen(x) && (x.waiting_on === p.id || openFus(x).some(f => f.person_id === p.id)));
+        return confirmSheet(refs.length ? t('delPersonRefsQ', { n: refs.length }) : t('delPersonQ'), t('delete'), () => {
+          const snap = { p: structuredClone(p), tasks: refs.map(x => structuredClone(x)) };
+          refs.forEach(x => { if (x.waiting_on === p.id) { x.waiting_on = null; if (x.status === 'wait') x.status = 'prog'; } openFus(x).filter(f => f.person_id === p.id).forEach(f => { f.status = 'done'; f.closed_on = T(); f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: '', outcome: 'person_deleted' }); }); putTask(x); });
+          p.deleted = true; putPerson(p); popLayer();
+          toast(t('deleted'), () => { putPerson(snap.p); snap.tasks.forEach(putTask); });
+        });
+      }
       case 'mic': return toggleMic();
       case 'aiundo': return undoAI(id);
       case 'harvest': return openHarvest();
@@ -1826,12 +1869,12 @@ document.addEventListener('click', async e => {
       case 'sync': return syncNow();
       case 'importv1': { const d = v1Data(); if (!d) return; const conv = convertV1(d); bulkReplace({ tasks: state.tasks.concat(conv.tasks), people: state.people.concat(conv.people) }); try { localStorage.setItem('rafeeq2.v1imported', '1'); } catch { } toast(t('imported')); return renderMain(); }
       case 'skipv1': { try { localStorage.setItem('rafeeq2.v1imported', 'skip'); } catch { } return renderMain(); }
-      case 'adopt': { const n = adoptLocalLeftovers(); toast(t('adopted', { n })); return renderMain(); }
+      case 'adopt': { const n = adoptLocalLeftovers(); toast(t('adopted', { n: plural(n, 'tasks') })); return renderMain(); }
       case 'export': return exportBackup();
       case 'import': return $('#importFile').click();
       case 'signout': {
         const pend = state.sync.pending;
-        const msg = state.mode === 'cloud' ? (pend ? t('signOutPendingQ', { n: pend }) : t('signOutQ')) : t('leaveLocalQ');
+        const msg = state.mode === 'cloud' ? (pend ? t('signOutPendingQ', { n: plural(pend, 'edits') }) : t('signOutQ')) : t('leaveLocalQ');
         return confirmSheet(msg, state.mode === 'cloud' ? t('signOut') : t('leaveLocal'), () => signOut({ wipe: state.mode === 'cloud' }));
       }
     }
@@ -1863,27 +1906,32 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && tgt.matches?.('[role="button"][data-open]')) { e.preventDefault(); openTask(tgt.dataset.open); return; }
   if (e.key === 'Enter' && tgt.id === 'chatIn' && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatSend(tgt.value); return; }
   if (e.key === 'Escape') { if ($('#present') && !$('#present').hidden) { closePresent(); return; } if (!$('#confirm').hidden) { $('#confirm').hidden = true; return; } if ($('#sheet').classList.contains('on')) { closeSheet(); return; } if (UI.layers.length) { popLayer(); return; } }
-  if (state.mode && !tgt.closest?.('input,textarea,select,[contenteditable]') && !$('#sheet').classList.contains('on') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+  if (state.mode && !tgt.closest?.('input,textarea,select,[contenteditable]') && !$('#sheet').classList.contains('on') && $('#confirm').hidden && ($('#present')?.hidden ?? true) && !e.ctrlKey && !e.metaKey && !e.altKey) {
     if (e.key === '/' || e.key === 'n' || e.key === 'N' || e.key === 'ى') { e.preventDefault(); openChat(); }
   }
 });
 
 /* ================= live updates ================= */
 onChange(why => {
-  if (why === 'auth') { if (state.mode === 'cloud') scheduleAI(4000); return renderAll(); }
+  if (why === 'auth') { if (!state.mode) { closeAllLayers(); closeSheet(true); $('#confirm').hidden = true; if ($('#present')) $('#present').hidden = true; } return renderAll(); }
   if (why === 'profile') { if ($('#onbForm') || $('#sheet')?.classList.contains('on')) return; UI.keepScroll = true; return renderAll(); }
   if (why === 'drive') {
+    if (state.drive.wrongAccount) { state.drive.wrongAccount = false; toast(t('driveWrongAccount'), null, 'err', 9000); signOut({ wipe: false }); return; }
     if (state.drive.justLinked) { state.drive.justLinked = false; toast(t('driveLinked')); if (state.mode) return go('library'); }
     if (state.mode) { renderMain(); UI.layers.forEach(Lr => Lr.rerender()); }
     return;
   }
   if (!state.mode) return;
   if (why === 'sync') { document.querySelectorAll('.nav-foot, .hdr-side').forEach(n => n.innerHTML = syncChip()); const sc = document.querySelector('.sync-card'); if (sc && UI.tab === 'more') renderMain(); return; }
-  if (why === 'data') { if ($('#onbForm')) return; renderNav(); UI.keepScroll = true; renderMain(); UI.layers.forEach(Lr => Lr.rerender()); }
+  if (why === 'data') {
+    if ($('#onbForm')) return; renderNav(); UI.keepScroll = true;
+    const a = document.activeElement?.id; // keep the search box (and the phone keyboard) mounted while typing
+    if (a === 'taskQ' && UI.tab === 'tasks') renderListOnly('tasks', '#taskList'); else if (a === 'libQ' && UI.tab === 'library') renderListOnly('library', '#libList'); else renderMain();
+    UI.layers.forEach(Lr => Lr.rerender());
+    if (location.hash.startsWith('#t=')) routeHash(); // a notification tap that arrived before the task was pulled
+  }
 });
 
-window.addEventListener('online', () => scheduleAI(2000));
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleAI(2500); });
 
 /* ================= boot ================= */
 renderAll();
@@ -1898,7 +1946,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     if (/[?&](code|error)=/.test(location.search)) return;
     let n = 0; try { n = +sessionStorage.getItem('rafeeq2.rl') || 0; sessionStorage.setItem('rafeeq2.rl', String(n + 1)); } catch { }
     if (n >= 2) return; // never loop
-    if (Date.now() - bootAt < 8000 && !$('#sheet')?.classList.contains('on')) { location.reload(); return; }
+    if (Date.now() - bootAt < 8000 && !$('#sheet')?.classList.contains('on') && !$('#onbForm') && !UI.layers.length) { location.reload(); return; }
     toast(t('updateReady'), () => location.reload(), undefined, 15000); const b = $('#undoBtn'); if (b) b.textContent = t('updateNow');
   };
   navigator.serviceWorker.addEventListener('controllerchange', newRelease);

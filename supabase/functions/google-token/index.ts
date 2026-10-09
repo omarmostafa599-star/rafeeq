@@ -47,6 +47,6 @@ Deno.serve(async (req) => {
     }
     return json(req, { access_token: g.access_token, expires_in: g.expires_in ?? 3600 });
   } catch (e) {
-    return json(req, { error: 'server', detail: String(e) }, 500);
+    console.error(e); return json(req, { error: 'server' }, 500);
   }
 });
