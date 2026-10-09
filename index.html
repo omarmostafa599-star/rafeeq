@@ -434,6 +434,24 @@ body.presenting{overflow:hidden}
   body.printing,body.printing.presenting{overflow:visible!important;height:auto!important}
 }
 
+/* «متابعاتي» */
+.seg.two{grid-template-columns:1fr 1fr}
+.seg .cnt{margin-inline-start:4px;line-height:18px;font-size:11px}
+.mf-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.mf-card.late{border-color:color-mix(in srgb,var(--late) 35%,var(--line))}
+.mf-h{display:flex;align-items:center;gap:10px}
+.mf-who{display:flex;align-items:center;gap:10px;flex:1;min-width:0;background:none;border:none;padding:0;text-align:start;color:inherit}
+.mf-who b{display:block;font-size:15.5px} .mf-who small{display:block;color:var(--ink-3);font-size:12.5px}
+.mf-items{margin-top:8px;display:grid;gap:2px}
+.mf-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px dashed var(--line)}
+.mf-item .body{flex:1;min-width:0;cursor:pointer;display:flex;flex-direction:column}
+.mf-item .t{font-weight:600;font-size:14.5px}
+.mf-item .meta{display:flex;flex-wrap:wrap;gap:8px;font-size:12.5px;color:var(--ink-3)}
+.mf-item.late .meta .due{color:var(--late);font-weight:600}
+.mf-item .iconbtn{color:var(--accent)}
+.mf-acts{display:flex;gap:8px;margin-top:8px}
+.muted{color:var(--ink-3)}
+
 /* first-use tour */
 .tour{text-align:center;padding:4px 2px 0}
 .tour-ic{width:56px;height:56px;border-radius:16px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;margin:0 auto 12px}

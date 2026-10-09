@@ -277,6 +277,36 @@ function fuRow(x, f) {
       <div class="meta"><span dir="auto">${esc(f.what || x.title)}</span>${f.time ? `<span class="num">${sic('clock', 12)} ${fmtTime(f.time)}</span>` : ''}${fuLate(f) ? `<span class="pill late">${lateTxt(f.due)}</span>` : ''}</div></div>
     <button type="button" class="iconbtn sm" data-act="remind" data-id="${x.id}" data-fu="${esc(f.id)}" aria-label="${esc(t('remind'))}" title="${esc(t('remind'))}">${sic('send', 17)}</button><button type="button" class="btn sm" data-act="furesult" data-id="${x.id}" data-fu="${esc(f.id)}">${t('logResult')}</button></div>`;
 }
+/* «متابعاتي»: everyone with something open between you, most urgent first */
+function myFollowups() {
+  const td = T(), by = new Map();
+  const add = (pid, it) => { if (!pid) return; if (!by.has(pid)) by.set(pid, []); by.get(pid).push(it); };
+  live().filter(x => isOpen(x) && !x.archived).forEach(x => {
+    openFus(x).forEach(f => add(f.person_id, { x, f, due: f.due || null, late: fuLate(f) }));
+    if (x.status === 'wait' && x.waiting_on) add(x.waiting_on, { x, f: null, due: x.due || null, late: isLate(x), wait: true });
+  });
+  const lateDays = it => it.late && it.due ? diffDays(td, it.due) : 0;
+  return [...by].map(([pid, items]) => {
+    items.sort((a, b) => (b.late - a.late) || ((a.due || '9999') < (b.due || '9999') ? -1 : 1));
+    const late = items.filter(i => i.late).length, worst = Math.max(0, ...items.map(lateDays));
+    const next = items.map(i => i.due).filter(Boolean).sort()[0] || null;
+    return { pid, items, late, worst, next, today: items.some(i => i.due === td), waitOnly: items.every(i => i.wait) };
+  }).sort((a, b) => (b.worst - a.worst) || (b.late - a.late) || (b.today - a.today) || ((a.next || '9999') < (b.next || '9999') ? -1 : (a.next || '9999') > (b.next || '9999') ? 1 : 0) || pname(a.pid).localeCompare(pname(b.pid), 'ar'));
+}
+function mfCard(g) {
+  const p = personById(g.pid), name = pname(g.pid), phone = p?.contact && /\d{7,}/.test(p.contact) ? p.contact : '';
+  const badge = g.late ? `<span class="pill late">${t('mfLate', { d: plural(g.worst, 'days') })}</span>` : g.today ? `<span class="pill prog">${t('today')}</span>` : g.waitOnly ? `<span class="pill wait">${t('mfWaitingReply')}</span>` : g.next ? `<span class="num muted">${rel(g.next)}</span>` : '';
+  const row = it => `<div class="mf-item ${it.late ? 'late' : ''}">
+      <span class="body" data-open="${it.x.id}" role="button" tabindex="0"><span class="t" dir="auto">${esc(it.wait ? it.x.title : (it.f.what || it.x.title))}</span>
+        <span class="meta">${it.f && it.f.what ? `<span dir="auto">${esc(it.x.title)}</span>` : ''}${it.due ? `<span class="due">${it.late ? lateTxt(it.due) : rel(it.due)}</span>` : `<span class="due">${t('noDue')}</span>`}${it.wait ? `<span>${sic('clock', 12)} ${t('mfWaitingFor', { w: t('w_' + (it.x.waiting_what || 'reply')) })}</span>` : ''}</span></span>
+      ${it.f ? `<button type="button" class="iconbtn sm" data-act="remind" data-id="${it.x.id}" data-fu="${esc(it.f.id)}" aria-label="${esc(t('remind'))}" title="${esc(t('remind'))}">${sic('send', 17)}</button><button type="button" class="btn sm" data-act="furesult" data-id="${it.x.id}" data-fu="${esc(it.f.id)}">${t('logResult')}</button>` : ''}
+    </div>`;
+  return `<section class="mf-card ${g.late ? 'late' : ''}">
+      <div class="mf-h"><button type="button" class="mf-who" data-person="${g.pid}"><span class="av">${esc(initials(name))}</span><span class="grow"><b dir="auto">${esc(name)}</b>${p?.org ? `<small dir="auto">${esc(p.org)}</small>` : ''}</span></button>${badge}</div>
+      <div class="mf-items">${g.items.slice(0, 6).map(row).join('')}${g.items.length > 6 ? `<button type="button" class="linkbtn" data-person="${g.pid}">${t('showMore', { n: g.items.length - 6 })}</button>` : ''}</div>
+      ${phone ? `<div class="mf-acts"><a class="btn sm" href="tel:${esc(phone.replace(/[^\d+]/g, ''))}">${sic('phone', 15)}${t('call')}</a><a class="btn sm" href="https://wa.me/${esc(waNumber(phone))}" target="_blank" rel="noopener">${sic('send', 15)}WhatsApp</a></div>` : ''}
+    </section>`;
+}
 const sec = (title, n, body, cls = '') => `<section class="sec"><div class="sec-h"><h3>${title}</h3>${n != null ? `<span class="cnt ${cls}">${n}</span>` : ''}</div><div class="stack">${body}</div></section>`;
 const emptyBox = (title, text, btn = '') => `<div class="empty"><div class="empty-ic">${ic.note}</div><h3>${title}</h3><p>${text}</p>${btn}</div>`;
 
@@ -499,8 +529,15 @@ const VIEWS = {
   },
   people() {
     const ppl = people();
+    const mine = myFollowups();
+    const view = UI.pview || (mine.length ? 'mine' : 'all');
+    const lateN = mine.filter(g => g.late).length;
+    const sub = view === 'mine' ? (mine.length ? `${plural(mine.length, 'people')}${lateN ? ` · ${t('nLateShort', { n: lateN })}` : ''}` : t('peopleSub')) : t('peopleSub');
+    const head = `<header class="hdr"><div class="grow"><h1>${t('navPeople')}</h1><div class="sub">${sub}</div></div><button type="button" class="btn primary sm" data-act="newperson">${ic.plus}${t('add')}</button>${meBtn()}</header>
+      <div class="seg two" role="tablist">${[['mine', 'pvMine'], ['all', 'pvAll']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${view === k}" class="${view === k ? 'on' : ''}" data-pview="${k}">${t(l)}${k === 'mine' && mine.length ? ` <span class="cnt ${lateN ? 'late' : ''}">${mine.length}</span>` : ''}</button>`).join('')}</div>`;
+    if (view === 'mine') return head + (mine.length ? `<div class="stack">${mine.map(mfCard).join('')}</div>` : emptyBox(t('mfEmptyTitle'), t('mfEmptyText'), ppl.length ? `<button type="button" class="btn" data-pview="all">${t('pvAll')}</button>` : ''));
     const stats = id => { let open = 0, late = 0, last = null; live().forEach(x => { (x.followups || []).forEach(f => { if (f.person_id !== id) return; if (f.status === 'open' && isOpen(x)) { open++; if (fuLate(f)) late++; } (f.log || []).forEach(l => { if (!last || l.date > last) last = l.date; }); }); if (x.waiting_on === id && x.status === 'wait') open++; }); return { open, late, last }; };
-    return `<header class="hdr"><div class="grow"><h1>${t('navPeople')}</h1><div class="sub">${t('peopleSub')}</div></div><button type="button" class="btn primary sm" data-act="newperson">${ic.plus}${t('add')}</button>${meBtn()}</header>
+    return head + `
       ${ppl.length ? `<div class="stack">${ppl.map(p => { const s = stats(p.id); return `<button type="button" class="prow" data-person="${p.id}"><span class="av lg">${esc(initials(p.name))}</span><span class="body"><span class="t" dir="auto">${esc(p.name)}</span>${p.org ? `<span class="sub" dir="auto">${esc(p.org)}</span>` : ''}<span class="meta">${s.open ? `<span class="pill ${s.late ? 'late' : 'prog'}">${plural(s.open, 'openFu')}</span>` : ''}<span>${s.last ? t('lastContact', { d: rel(s.last) }) : t('noContact')}</span></span></span>${sic('back', 18).replace('<svg', '<svg class="chev"')}</button>`; }).join('')}</div>` : emptyBox(t('noPeople'), t('noPeopleText'), `<button type="button" class="btn primary" data-act="newperson">${ic.plus}${t('addPerson')}</button>`)}`;
   },
   library() {
@@ -1392,7 +1429,7 @@ function maybeTour() {
 }
 function openTour(i) {
   const st = TOUR[i]; if (!st) return;
-  try { localStorage.setItem('rafeeq2.tour.' + (state.user?.id || 'local'), '1'); } catch { }
+  if (i > 0) { try { localStorage.setItem('rafeeq2.tour.' + (state.user?.id || 'local'), '1'); } catch { } }
   const last = i === TOUR.length - 1;
   openSheet(t('tourTitle'), `<div class="tour">
       <div class="tour-ic">${ic[st.ic]}</div>
@@ -1789,6 +1826,7 @@ document.addEventListener('click', async e => {
   if ((el = q('[data-tab]'))) { e.preventDefault(); return go(el.dataset.tab); }
   if ((el = q('[data-jump]'))) { document.getElementById(el.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if ((el = q('[data-seg]'))) { UI.seg = el.dataset.seg; return renderMain(); }
+  if ((el = q('[data-pview]'))) { UI.pview = el.dataset.pview; return renderMain(); }
   if ((el = q('[data-pf]'))) { UI.personF = UI.personF === el.dataset.pf ? null : el.dataset.pf; return renderMain(); }
   if ((el = q('[data-ltype]'))) { UI.ltype = el.dataset.ltype; return renderMain(); }
   if ((el = q('[data-file]'))) return openFile(el.dataset.file);
@@ -1882,7 +1920,7 @@ document.addEventListener('click', async e => {
       case 'asksrc': { const st = Object.assign({}, state.profile.settings); st.askSource = !askSource(); saveProfile({ settings: st }); return renderMain(); }
       case 'tour': return openTour(0);
       case 'tournext': return openTour(+el.dataset.v);
-      case 'tourdone': { closeSheet(true); if (!(state.profile.settings || {}).tourDone) { const st = Object.assign({}, state.profile.settings, { tourDone: 1 }); saveProfile({ settings: st }, { quiet: true }); } if (el.dataset.chat) openChat(); return; }
+      case 'tourdone': { try { localStorage.setItem('rafeeq2.tour.' + (state.user?.id || 'local'), '1'); } catch { } closeSheet(true); if (!(state.profile.settings || {}).tourDone) { const st = Object.assign({}, state.profile.settings, { tourDone: 1 }); saveProfile({ settings: st }, { quiet: true }); } if (el.dataset.chat) openChat(); return; }
       case 'aitoggle': { const st = Object.assign({}, state.profile.settings); st.ai = st.ai === false; saveProfile({ settings: st }); if (st.ai) { UI.aiBlocked = null; scheduleAI(500); } return renderMain(); }
       case 'filetask': {
         const fl = fileById(el.dataset.fid); if (!fl) return;
