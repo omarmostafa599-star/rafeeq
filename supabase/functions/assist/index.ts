@@ -4,7 +4,7 @@
 // Secrets: GEMINI_API_KEY (optional GEMINI_MODEL)
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const ALLOWED_ORIGINS = ['https://omarmostafa599-star.github.io'];
+const ALLOWED_ORIGINS = ['https://myrafeeq.github.io', 'https://omarmostafa599-star.github.io'];
 const MODELS = [Deno.env.get('GEMINI_MODEL') || 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];
 const DAILY_CAP = 600;
 
@@ -106,7 +106,9 @@ Each task:
 - recur: only if the user says it repeats. freq daily (every workday) | weekly (days: 0=Sunday … 6=Saturday) | monthly (dom = day of month, or last = true for the last workday of the month) | quarterly (every 3 months, dom). Otherwise null. For a recurring task without an explicit date, set due to the first occurrence from today.
 - priority: "hi" only if urgency is stated (عاجل، ضروري، مهم جدًا، urgent); "lo" if explicitly not urgent; else "mid".
 - role: "exec" if the user does the work; "follow" if the user only follows up others who execute; "both" if the user executes and also follows up others.
-- source: who assigned the task, ONLY if stated (e.g. "طلب مني م. مأمون", "المدير كلفني"). source_self = true ONLY if the user explicitly says it is self-initiated ("من نفسي", "مبادرة مني", "أنا المصدر"). Otherwise source = null and source_self = false.
+- source: who assigned the task, ONLY if stated (e.g. "طلب مني م. مأمون", "المدير كلفني"). source_self = true if the user explicitly says it is self-initiated ("من نفسي", "مبادرة مني", "أنا المصدر") OR the user is the one delegating/assigning the work to others ("كلّف X", "خلّي X يعمل", "قول لـ X", "أحمد يجهز…" said as an instruction) — a manager delegating is the source. Otherwise source = null and source_self = false.
+- Delegation ("كلّف أحمد يجهز التقرير الأحد"): role = "follow", the person is role "followup" (not "waiting") with what = the deliverable and due = the stated date; the task due = the same date.
+- project: if a message names a project once (e.g. starts with "مشروع برج النخيل:"), apply it to EVERY task in that message.
 - people: EVERY person mentioned (several are common). name = the person's name only, without titles (م. د. أ.) and without job descriptions. desc = job title/department only if mentioned (e.g. "رئيس قسم العطور محمد عباس" → name "محمد عباس", desc "رئيس قسم العطور"); never put a title like "مهندس" in desc. If only a role is given with no name ("المدير"), set name to that role and generic = true. role "followup" if the user must contact/follow up with them, "waiting" if the user waits for something from them, else "related". what = what is needed from that person (short, formal) or null. due = follow-up date if stated, else null.
 - If a person matches a known contact below, return the contact's name EXACTLY as written there.
 - waiting_what: reply / decision / approval when waiting, else null.
@@ -153,6 +155,8 @@ Deno.serve(async (req) => {
 
     const { data: ok } = await admin.rpc('ai_take', { uid: user.id, cap: DAILY_CAP });
     if (ok === false) return json(req, { error: 'quota' });
+    const { data: gok } = await admin.rpc('ai_take', { uid: '00000000-0000-0000-0000-000000000000', cap: 1200 }); // all users together, per day (free tier)
+    if (gok === false) return json(req, { error: 'busy' });
 
     const payload = {
       systemInstruction: { parts: [{ text: instructions({ today, weekday, lang, known, sources, weekend }) }] },
@@ -161,7 +165,7 @@ Deno.serve(async (req) => {
     };
     let lastErr = '';
     for (const model of [...new Set(MODELS)]) {
-      const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 15000);
+      const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 9000);
       try {
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
           method: 'POST', signal: ctl.signal,
@@ -169,14 +173,14 @@ Deno.serve(async (req) => {
           body: JSON.stringify(payload),
         });
         const g = await r.json();
-        if (!r.ok) { lastErr = g?.error?.status || String(r.status); if (r.status === 404 || r.status === 400) continue; return json(req, { error: 'gemini', detail: lastErr }, 502); }
+        if (!r.ok) { lastErr = g?.error?.status || String(r.status); if (r.status === 404 || r.status === 400 || r.status === 429 || r.status === 503) continue; return json(req, { error: 'gemini', detail: lastErr }, 502); }
         const out = g?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '';
         const res = JSON.parse(out);
         if (body.v !== 2 && ['chat', 'edit', 'save', 'cancel'].includes(res.intent)) res.intent = 'other'; // clients before 2.5
         return json(req, { result: res, model });
       } catch (e) { lastErr = String(e); } finally { clearTimeout(timer); }
     }
-    return json(req, { error: 'gemini', detail: lastErr }, 502);
+    return json(req, { error: /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE/.test(lastErr) ? 'busy' : 'gemini', detail: lastErr }, /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE/.test(lastErr) ? 200 : 502);
   } catch (e) {
     return json(req, { error: 'server', detail: String(e) }, 500);
   }

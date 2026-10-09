@@ -9,9 +9,11 @@ import { DICT } from './i18n.js';
 const L = () => state.profile.lang === 'en' ? 'en' : 'ar';
 export function t(k, v) { let s = DICT[L()][k] ?? DICT.ar[k] ?? k; if (v) for (const x in v) s = s.split('{' + x + '}').join(v[x]); return s; }
 const LOC = () => L() === 'ar' ? 'ar-u-ca-gregory-nu-latn' : 'en-GB';
-const fmt = (s, o = { day: 'numeric', month: 'long' }) => new Intl.DateTimeFormat(LOC(), o).format(pd(s));
+const DTF = new Map();
+const dtf = (loc, o) => { const k = loc + JSON.stringify(o); let f = DTF.get(k); if (!f) { f = new Intl.DateTimeFormat(loc, o); DTF.set(k, f); } return f; };
+const fmt = (s, o = { day: 'numeric', month: 'long' }) => dtf(LOC(), o).format(pd(s));
 const fmtShort = s => fmt(s, { day: 'numeric', month: 'short' });
-const wd = s => new Intl.DateTimeFormat(LOC(), { weekday: 'long' }).format(pd(s));
+const wd = s => dtf(LOC(), { weekday: 'long' }).format(pd(s));
 const T = () => today();
 function rel(s) { if (!s) return t('noDue'); const d = diffDays(s, T()); if (d === 0) return t('today'); if (d === 1) return t('tomorrow'); if (d === -1) return t('yesterday'); if (d > 1 && d < 7) return wd(s); return fmtShort(s); }
 function plural(n, base) { // Arabic-aware counts
@@ -31,6 +33,7 @@ const ic = {
   users: I('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.6.8 2.6 2.5 3 5.2"/>'),
   user: I('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>'),
   more: I('<circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/>'),
+  phone: I('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>'),
   mic: I('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>'),
   check: I('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 'stroke-width="3"'),
   clock: I('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
@@ -69,7 +72,9 @@ const gLogo = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true
 
 /* ================= model helpers ================= */
 const live = () => state.tasks.filter(x => !x.deleted);
-const people = () => state.people.filter(p => !p.deleted).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+const COLL = new Intl.Collator('ar');
+let peopleMemo = { rev: -1, list: [] };
+const people = () => { if (peopleMemo.rev !== state.rev) peopleMemo = { rev: state.rev, list: state.people.filter(p => !p.deleted).sort((a, b) => COLL.compare(a.name, b.name)) }; return peopleMemo.list; };
 const taskById = id => state.tasks.find(x => x.id === id);
 const personById = id => state.people.find(p => p.id === id);
 const pname = id => { const p = personById(id); return p && !p.deleted ? p.name : t('deletedPerson'); };
@@ -86,7 +91,7 @@ const openFus = x => (x.followups || []).filter(f => f.status === 'open');
 const fuLate = f => f.status === 'open' && f.due && f.due < T();
 function addLog(x, kind, text = '', data = {}) { x.log = x.log || []; x.log.push({ id: uuid(), at: nowISO(), kind, text, data }); }
 function getOrCreatePerson(name) {
-  const n = (name || '').trim().replace(/\s+/g, ' '); if (!n) return null;
+  const n = (name || '').trim().replace(/\s+/g, ' ').slice(0, 200); if (!n) return null;
   const id = matchPerson(n); if (id) return id;
   const p = newPerson(n); putPerson(p); return p.id;
 }
@@ -94,8 +99,8 @@ function sortTasks(list) {
   return list.slice().sort((a, b) => (isLate(b) - isLate(a)) || ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) || ((a.due_time || '99') < (b.due_time || '99') ? -1 : (a.due_time || '99') > (b.due_time || '99') ? 1 : 0) || ({ hi: 0, mid: 1, lo: 2 }[a.priority] - { hi: 0, mid: 1, lo: 2 }[b.priority]) || (a.created_at < b.created_at ? -1 : 1));
 }
 const nextWorkday = () => addWorkdays(T(), 1);
-const wdName = d => new Intl.DateTimeFormat(LOC(), { weekday: 'long' }).format(new Date(2026, 9, 4 + d)); // 4 Oct 2026 is a Sunday
-const fmtTime = s => { const m = /^(\d{2}):(\d{2})$/.exec(s || ''); return m ? new Intl.DateTimeFormat(LOC(), { hour: 'numeric', minute: '2-digit' }).format(new Date(2026, 0, 1, +m[1], +m[2])) : ''; };
+const wdName = d => dtf(LOC(), { weekday: 'long' }).format(new Date(2026, 9, 4 + d)); // 4 Oct 2026 is a Sunday
+const fmtTime = s => { const m = /^(\d{2}):(\d{2})$/.exec(s || ''); return m ? dtf(LOC(), { hour: 'numeric', minute: '2-digit' }).format(new Date(2026, 0, 1, +m[1], +m[2])) : ''; };
 function recurLabel(r) {
   if (!r) return '';
   if (r.f === 'daily') return t('rcDaily');
@@ -125,14 +130,14 @@ const UI = { tab: 'today', seg: 'active', personF: null, q: '', layers: [], them
 
 /* ================= toast ================= */
 let toastTimer;
-function toast(msg, undo, kind) {
+function toast(msg, undo, kind, ms) {
   const el = $('#toast');
   el.className = 'toast' + (kind ? ' ' + kind : '');
   el.innerHTML = `<span>${esc(msg)}</span>${undo ? `<button type="button" id="undoBtn">${t('undo')}</button>` : ''}`;
   requestAnimationFrame(() => el.classList.add('on'));
   clearTimeout(toastTimer);
   if (undo) $('#undoBtn').onclick = () => { undo(); el.classList.remove('on'); };
-  toastTimer = setTimeout(() => el.classList.remove('on'), undo ? 4500 : 2600);
+  toastTimer = setTimeout(() => el.classList.remove('on'), ms || (undo ? 4500 : 2600));
 }
 
 /* ================= shell ================= */
@@ -216,6 +221,12 @@ function syncChip() {
   if (s.status === 'error') return `<button type="button" class="sync err" data-act="sync">${sic('cloud')}${t('syncError')}</button>`;
   if (s.status === 'syncing' || s.pending) return `<span class="sync" title="${esc(t('syncing'))}">${sic('cloud')}<span class="sl">${t('syncing')}</span></span>`;
   return `<span class="sync ok" title="${esc(t('synced'))}">${sic('check')}<span class="sl">${t('synced')}</span></span>`;
+}
+/** Re-render only the results of a search box, so the box (and the phone keyboard) stays put. */
+function renderListOnly(view, sel) {
+  const box = $(sel); if (!box || UI.tab !== view) return renderMain();
+  UI.listOnly = true; try { box.innerHTML = VIEWS[view](); } finally { UI.listOnly = false; }
+  bindSwipes(box);
 }
 function renderMain() {
   setWeekend((state.profile.settings || {}).wk || [5, 6]);
@@ -472,8 +483,11 @@ const VIEWS = {
     if (UI.seg === 'done') list = list.filter(x => !isOpen(x) && !x.archived);
     if (UI.seg === 'archived') list = list.filter(x => x.archived);
     if (UI.personF) list = list.filter(x => x.waiting_on === UI.personF || (x.followups || []).some(f => f.person_id === UI.personF));
-    if (UI.q) { const q = normAr(UI.q); list = list.filter(x => normAr([x.title, x.details, x.project, x.source, x.notes, x.result, ...(x.followups || []).map(f => f.what + ' ' + pname(f.person_id)), ...(x.log || []).map(l => l.text)].join(' ')).includes(q)); }
+    if (UI.q.trim()) { const q = normAr(UI.q.trim()); list = list.filter(x => normAr([x.title, x.details, x.project, x.source, x.notes, x.result, ...(x.followups || []).map(f => f.what + ' ' + pname(f.person_id)), ...(x.log || []).map(l => l.text)].join(' ')).includes(q)); }
     list = UI.seg === 'done' ? list.sort((a, b) => (b.completed_on || '') > (a.completed_on || '') ? 1 : -1) : sortTasks(list);
+    const shown = list.slice(0, UI.listMax || 80);
+    const listHTML = `${shown.length ? shown.map(x => taskCard(x, { status: UI.seg !== 'active' })).join('') : `<div class="empty small"><p>${UI.q.trim() || UI.personF ? t('noMatch') : t('noTasksHere')}</p></div>`}${list.length > shown.length ? `<button type="button" class="linkbtn center" data-act="morelist">${t('showMore', { n: list.length - shown.length })}</button>` : ''}`;
+    if (UI.listOnly) return listHTML;
     const pc = id => live().filter(x => isOpen(x) && (x.waiting_on === id || openFus(x).some(f => f.person_id === id))).length;
     const ppl = people().filter(p => pc(p.id)).slice(0, 12);
     const openN = live().filter(isOpen).length;
@@ -482,7 +496,7 @@ const VIEWS = {
       ${ppl.length ? `<div class="people-row">${ppl.map(p => `<button type="button" class="pchip ${UI.personF === p.id ? 'on' : ''}" data-pf="${p.id}"><span class="av">${esc(initials(p.name))}</span><span class="nm" dir="auto">${esc(p.name.replace(/^(?:م|د|أ|ا)\.\s*/, '').split(' ')[0])}</span><i class="num">${pc(p.id)}</i></button>`).join('')}</div>` : ''}
       <div class="seg" role="tablist">${[['active', 'segActive'], ['wait', 'segWait'], ['done', 'segDone']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${UI.seg === k}" class="${UI.seg === k ? 'on' : ''}" data-seg="${k}">${t(l)}</button>`).join('')}</div>
       ${UI.personF ? `<div class="chips filter"><button type="button" class="chip on" data-pf="${UI.personF}" dir="auto">${esc(pname(UI.personF))} ${sic('x', 14)}</button></div>` : ''}
-      <div class="stack">${list.length ? list.map(x => taskCard(x, { status: UI.seg !== 'active' })).join('') : `<div class="empty small"><p>${UI.q || UI.personF ? t('noMatch') : t('noTasksHere')}</p></div>`}</div>
+      <div class="stack" id="taskList">${listHTML}</div>
       ${UI.seg === 'done' || UI.seg === 'archived' ? `<button type="button" class="linkbtn center" data-seg="${UI.seg === 'archived' ? 'done' : 'archived'}">${UI.seg === 'archived' ? t('backToDone') : t('showArchived')}</button>` : ''}`;
   },
   people() {
@@ -507,14 +521,15 @@ const VIEWS = {
     if (UI.lmonth && !months.includes(UI.lmonth)) UI.lmonth = '';
     let list = all.filter(kindMatch);
     if (UI.lmonth) list = list.filter(f => localDay(f.created_at).startsWith(UI.lmonth));
-    if (UI.lq) { const q = normAr(UI.lq); list = list.filter(f => normAr([f.name, f.note, f.task_id ? taskById(f.task_id)?.title : '', f.person_id ? pname(f.person_id) : ''].join(' ')).includes(q)); }
+    if (UI.lq.trim()) { const q = normAr(UI.lq.trim()); list = list.filter(f => normAr([f.name, f.note, f.task_id ? taskById(f.task_id)?.title : '', f.person_id ? pname(f.person_id) : ''].join(' ')).includes(q)); }
     const counts = Object.fromEntries(kinds.map(([k]) => [k, k === 'all' ? all.length : all.filter(f => k === 'other' ? ['other', 'slides'].includes(kindOf(f)) : kindOf(f) === k).length]));
     h += `<label class="search">${ic.search}<input type="search" id="libQ" value="${esc(UI.lq)}" placeholder="${esc(t('searchFiles'))}" aria-label="${esc(t('searchFiles'))}" dir="auto"></label>
       <div class="lib-filters"><div class="people-row">${kinds.filter(([k]) => k === 'all' || counts[k]).map(([k, l]) => `<button type="button" class="chip ${UI.ltype === k ? 'on' : ''}" data-ltype="${k}">${t(l)} <i class="num">${counts[k]}</i></button>`).join('')}</div>
       ${months.length > 1 ? `<select class="msel" id="libMonth" aria-label="${esc(t('month'))}"><option value="">${t('allMonths')}</option>${months.map(m => `<option value="${m}" ${UI.lmonth === m ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select>` : ''}</div>`;
-    if (!list.length) return h + `<div class="empty small"><p>${t('noMatch')}</p></div>`;
     const groups = new Map(); list.forEach(f => { const m = localDay(f.created_at).slice(0, 7); if (!groups.has(m)) groups.set(m, []); groups.get(m).push(f); });
-    h += [...groups].map(([m, fs]) => sec(monthLabel(m), fs.length, fs.map(f => fileRow(f)).join(''))).join('');
+    const listHTML = list.length ? [...groups].map(([m, fs]) => sec(monthLabel(m), fs.length, fs.map(f => fileRow(f)).join(''))).join('') : `<div class="empty small"><p>${t('noMatch')}</p></div>`;
+    if (UI.listOnly) return listHTML;
+    h += `<div id="libList">${listHTML}</div>`;
     if (linked) h += `<a class="linkbtn center folder-link" href="${rootFolderUrl()}" target="_blank" rel="noopener">${sic('ext', 15)} ${t('openFolder')}</a>`;
     return h;
   },
@@ -650,12 +665,13 @@ const stKey = s => ({ todo: 'stTodo', prog: 'stProg', wait: 'stWait', hold: 'stH
 /* ================= sheets ================= */
 let sheetState = null;
 function openSheet(title, body, { onMount, wide, cls } = {}) {
+  stopMic();
   const sh = $('#sheet');
   sh.className = 'sheet' + (wide ? ' wide' : '') + (cls ? ' ' + cls : '');
   sh.innerHTML = `<div class="grab" aria-hidden="true"></div><div class="sheet-h"><h3>${title}</h3><button type="button" class="iconbtn" data-act="closesheet" aria-label="${esc(t('close'))}">${ic.x}</button></div><div class="sheet-b">${body}</div>`;
   $('#backdrop').classList.add('on');
   requestAnimationFrame(() => sh.classList.add('on'));
-  sheetState = { dirty: false };
+  sheetState = { dirty: false, guard: cls !== 'chat' };
   sh.addEventListener('input', () => sheetState && (sheetState.dirty = true), { once: true });
   onMount && onMount(sh);
   setTimeout(() => sh.querySelector('[autofocus]')?.focus(), 250);
@@ -675,7 +691,7 @@ function confirmSheet(msg, okLabel, onOk, danger = true) {
 }
 
 /* ================= assistant chat: capture (one or many tasks) + questions ================= */
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 const SELF = '@self';
 const srcLabel = s => !s ? '' : s === SELF ? t('srcSelf') : s;
 const aiOn = () => state.mode === 'cloud' && (state.profile.settings || {}).ai !== false;
@@ -740,10 +756,11 @@ function fromLocal(p, raw) {
   if (p.source) d.source = p.source.self ? SELF : (personById(matchPerson(p.source.name))?.name || p.source.name);
   return d;
 }
-const SELF_RE = /(من نفسي|مبادره|بنفسي|ذاتي|my own|myself|self)/;
+const SELF_RE = /(من نفسي|مبادره|بنفسي|ذاتي|my own|myself|self|كلف|كلفت|خلي |خليت|قول ل|قولي ل|ابلغ|بلغ |اطلب من|اطلبي من|assign|delegate|tell )/;
 function fromAI(a, local, raw = '') {
-  const d = { id: uuid(), raw: local?.raw || '', title: String(a.title || local?.title || '').replace(/\s+/g, ' ').trim().slice(0, 300), due: validDate(a.due) || local?.due || null, noDue: !!a.no_due, weekendOk: false,
+  const d = { id: uuid(), raw: local?.raw || '', title: String(a.title || local?.title || '').replace(/\s+/g, ' ').trim().slice(0, 300), due: validDate(a.due) || local?.due || null, weekendOk: false,
     priority: ['hi', 'mid', 'lo'].includes(a.priority) ? a.priority : local?.priority || 'mid', role: ['exec', 'follow', 'both'].includes(a.role) ? a.role : 'exec',
+    noDue: !!a.no_due && /(بدون|من غير|دون|مفيش|ملوش|مالوش|no deadline|no due|whenever)/.test(normAr(raw || local?.raw || '')),
     source: a.source_self && SELF_RE.test(normAr(raw || local?.raw || '')) ? SELF : a.source ? (personById(matchPerson(a.source))?.name || String(a.source).slice(0, 80)) : local?.source || null,
     project: String(a.project || '').slice(0, 80), waitWhat: a.waiting_what || null, people: [],
     time: /^\d{2}:\d{2}$/.test(a.due_time || '') ? a.due_time : local?.time || null, recur: cleanRecur(a.recur) || local?.recur || null };
@@ -781,7 +798,7 @@ function fromLog(title, date, raw, project = '') {
 /** First missing piece of a draft, or null when it can be saved. */
 function missingOf(d) {
   if (isLogD(d)) return d.match && d.closeTask === undefined ? { k: 'match' } : null;
-  let i = d.people.findIndex(p => p.ref.kind === 'generic'); if (i >= 0) return { k: 'generic', i };
+  let i = d.people.findIndex(p => p.ref.kind === 'generic' && p.role !== 'related'); if (i >= 0) return { k: 'generic', i };
   i = d.people.findIndex(p => p.ref.kind === 'amb'); if (i >= 0) return { k: 'amb', i };
   if (!d.due && !d.noDue) return { k: 'due' };
   if (d.due && isWeekend(d.due) && !d.weekendOk) return { k: 'weekend' };
@@ -797,19 +814,21 @@ function openChat(prefill = '') {
   openSheet(`<span class="chat-t">${sic('spark', 18)} ${t('assistant')}</span>`, `<div class="chat-log" id="chatLog"></div>
     <div class="chat-foot"><div class="chat-sugg" id="chatSugg"></div>
       <div class="composer"><textarea id="chatIn" rows="1" placeholder="${esc(t('chatPh'))}" aria-label="${esc(t('chatPh'))}" dir="auto"></textarea>
-        <div class="tools"><span id="recState" class="rec-state"></span><button type="button" class="linkbtn sm" data-act="newtask">${sic('edit', 15)} ${t('manualEntry')}</button>${SR ? `<button type="button" class="mic" id="micBtn" data-act="mic" aria-label="${esc(t('speak'))}">${ic.mic}</button>` : ''}<button type="button" class="send" data-act="chatsend" aria-label="${esc(t('send'))}">${ic.send}</button></div></div></div>`, {
+        <div class="tools"><span id="recState" class="rec-state"></span><button type="button" class="linkbtn sm" data-act="newtask">${sic('edit', 15)} ${t('manualEntry')}</button><button type="button" class="mic" id="micBtn" data-act="mic" aria-label="${esc(t('speak'))}">${ic.mic}</button><button type="button" class="send" id="chatSendBtn" data-act="chatsend" aria-label="${esc(t('send'))}">${ic.send}</button></div></div></div>`, {
     cls: 'chat', onMount: sh => { const ta = sh.querySelector('#chatIn'); ta.addEventListener('input', () => autoGrow(ta)); if (prefill) ta.value = prefill; }
   });
   renderChat(true);
   setTimeout(() => $('#chatIn')?.focus(), 260);
+  if (aiOn() && navigator.onLine && Date.now() - (CH.warm || 0) > 240000) { CH.warm = Date.now(); invokeAssist({ v: 2, text: '' }, 8000).catch(() => { }); } // wake the assistant early
 }
 function renderChat(scroll = true) {
   const log = $('#chatLog'); if (!log) return;
   const pend = pending();
-  const drafts = CH.drafts.length ? `<div class="bubble bot drafts">${CH.drafts.length > 1 ? `<div class="dh">${t(CH.drafts.every(isLogD) ? 'nLogsFound' : CH.drafts.some(isLogD) ? 'nItemsFound' : 'nTasksFound', { n: CH.drafts.length })}</div>` : ''}${CH.drafts.map((d, n) => draftCard(d, n, pend && pend.n === n)).join('')}
-      ${CH.thinking ? `<div class="thinking"><span class="dots"><i></i><i></i><i></i></span>${t('understanding')}</div>` : pend ? questionHTML(pend) : `<div class="ready">${sic('check', 16)} ${CH.drafts.some(isLogD) ? t(CH.drafts.length > 1 ? 'readyItems' : 'readyLog') : CH.drafts.length > 1 ? t('readyAll', { n: CH.drafts.length }) : t('readyOne')}</div>`}
-      <div class="save-row"><button type="button" class="btn primary block" data-act="chatsave" ${pend || CH.thinking ? 'disabled' : ''}>${ic.check}${CH.drafts.length > 1 ? t('saveAll', { n: CH.drafts.length }) : t('save')}</button><button type="button" class="btn" data-act="chatdiscard">${t('discardDrafts')}</button></div></div>` : '';
+  const drafts = CH.drafts.length || CH.thinking ? `<div class="bubble bot drafts">${CH.drafts.length > 1 ? `<div class="dh">${t(CH.drafts.every(isLogD) ? 'nLogsFound' : CH.drafts.some(isLogD) ? 'nItemsFound' : 'nTasksFound', { n: CH.drafts.length })}</div>` : ''}${CH.drafts.map((d, n) => draftCard(d, n, pend && pend.n === n)).join('')}
+      ${CH.thinking ? `<div class="thinking"><span class="dots"><i></i><i></i><i></i></span>${t(CH.drafts.length ? 'improving' : 'understanding')}</div>` : pend ? questionHTML(pend) : `<div class="ready">${sic('check', 16)} ${CH.drafts.some(isLogD) ? t(CH.drafts.length > 1 ? 'readyItems' : 'readyLog') : CH.drafts.length > 1 ? t('readyAll', { n: CH.drafts.length }) : t('readyOne')}</div>`}
+      ${CH.drafts.length ? `<div class="save-row"><button type="button" class="btn primary block" data-act="chatsave" ${pend || CH.thinking ? 'disabled' : ''}>${ic.check}${CH.drafts.length > 1 ? t('saveAll', { n: CH.drafts.length }) : t('save')}</button><button type="button" class="btn" data-act="chatdiscard">${t('discardDrafts')}</button></div>` : ''}</div>` : '';
   log.innerHTML = CH.msgs.map(m => `<div class="bubble ${m.who}">${m.html}</div>`).join('') + drafts;
+  const sb2 = $('#chatSendBtn'); if (sb2) sb2.disabled = !!CH.thinking;
   const sg = $('#chatSugg');
   if (sg) sg.innerHTML = CH.drafts.length ? '' : `<button type="button" class="chip" data-act="chatfill">${sic('check', 14)}${t('qLog')}</button>` + QCHIPS.map(([k, q]) => `<button type="button" class="chip" data-act="chatq" data-q="${esc(q)}" data-l="${esc(t(k))}">${t(k)}</button>`).join('');
   if (scroll) requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
@@ -901,7 +920,7 @@ function localDrafts(text) {
 }
 const GREET_RE = /^(ازيك|إزيك|ازيكم|عامل ايه|السلام عليكم|سلام عليكم|مرحبا|اهلا|أهلا|هاي|هلا|صباح الخير|مساء الخير|hi|hello|hey)(\s|$|[!.،,؟?])/;
 async function chatSend(text, label) {
-  text = String(text || '').trim(); if (!text) return;
+  text = String(text || '').trim(); if (!text || CH.thinking) return;
   if (!$('#chatLog')) openChat();
   CH.msgs.push({ who: 'me', html: `<span dir="auto">${esc(label || text)}</span>` }); hist('user', label || text);
   const ta = $('#chatIn'); if (ta) { ta.value = ''; autoGrow(ta); }
@@ -920,9 +939,14 @@ async function chatSend(text, label) {
     hist('model', t('nTasksFound', { n: locals.length }));
   };
   if (!(aiOn() && navigator.onLine)) { fallback(''); CH.pick = new Set(); renderChat(); return; }
-  CH.thinking = true; renderChat();
+  // show what the device understood right away; the assistant's answer replaces it a few seconds later
+  let prov = [];
+  if (!CH.drafts.length && !GREET_RE.test(shortN(text)) && text.split(/\s+/).length >= 3) { prov = localDrafts(text); CH.drafts.push(...prov); }
+  CH.thinking = true; CH.since = Date.now(); renderChat();
+  const dropProv = () => { if (prov.length) { CH.drafts = CH.drafts.filter(d => !prov.includes(d)); prov = []; } };
   try {
-    const r = await invokeAssist({ v: 2, text, history: CH.hist.slice(0, -1), drafts: draftBrief(), pending: pend ? pend.m.k : null, today: T(), weekday: new Intl.DateTimeFormat('en', { weekday: 'long' }).format(pd(T())), lang: L(), weekend: weekendDays(), people: people().map(p => p.name), sources: recentSources() });
+    const r = await invokeAssist({ v: 2, text, history: CH.hist.slice(0, -1), drafts: prov.length ? [] : draftBrief(), pending: pend ? pend.m.k : null, today: T(), weekday: new Intl.DateTimeFormat('en', { weekday: 'long' }).format(pd(T())), lang: L(), weekend: weekendDays(), people: people().map(p => p.name), sources: recentSources() });
+    dropProv();
     // 1) changes to the drafts already on screen
     const n0 = CH.drafts.length;
     (r.edits || []).forEach(e => applyEdit(CH.drafts[(e.n | 0) - 1], e));
@@ -940,7 +964,9 @@ async function chatSend(text, label) {
     else if (r.reply) botSay(r.reply);
   } catch (e) {
     console.warn('assist', e);
-    fallback(e?.code === 'missing_key' || e?.code === 'quota' ? `${t(e.code === 'quota' ? 'aiQuota' : 'aiNotReady')} · ${t('localUnderstanding')}` : t('localUnderstanding'));
+    const note = e?.code === 'quota' ? t('aiQuota') : e?.code === 'missing_key' ? t('aiNotReady') : e?.code === 'busy' ? t('aiBusy') : e?.code === 'timeout' ? t('aiSlow') : '';
+    if (prov.length) { prov = []; CH.msgs.push({ who: 'bot', html: `<span class="muted">${note ? note + ' · ' : ''}${t('localUnderstanding')}</span>` }); }
+    else fallback(`${note ? note + ' · ' : ''}${t('localUnderstanding')}`);
   } finally { CH.thinking = false; }
   CH.pick = new Set();
   renderChat();
@@ -1075,20 +1101,38 @@ function briefHTML(plain) {
 }
 
 /* ---------- voice ---------- */
-let rec = null;
+let rec = null, recTimer = null;
+const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function resetMic() { clearTimeout(recTimer); recTimer = null; rec = null; micUI(); }
 function toggleMic() {
-  if (!SR) return;
-  if (rec) { rec.stop(); return; }
-  const ta = $('#chatIn') || $('#cap'); if (!ta) return;
-  rec = new SR(); rec.lang = L() === 'ar' ? 'ar-SA' : 'en-US'; rec.interimResults = true; rec.continuous = false;
-  const base = ta.value ? ta.value.trimEnd() + ' ' : ''; let fin = '';
-  rec.onresult = e => { let interim = ''; for (let k = e.resultIndex; k < e.results.length; k++) { const r = e.results[k]; if (r.isFinal) fin += r[0].transcript + ' '; else interim += r[0].transcript; } ta.value = base + fin + interim; autoGrow(ta); };
-  rec.onerror = ev => { if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') toast(t('micDenied'), null, 'err'); };
-  rec.onend = () => { rec = null; micUI(); const v = ($('#chatIn')?.value || '').trim(); if (v && fin.trim()) chatSend(v); };
-  try { rec.start(); } catch { rec = null; }
+  const ta = $('#chatIn'); if (!ta) return;
+  if (IS_IOS || !SR) {
+    // iOS: the system keyboard's dictation is reliable everywhere (Safari and the home-screen app); the web speech API is not.
+    ta.focus(); toast(t('micUseKeyboard'), null, undefined, 4500); return;
+  }
+  if (rec) { try { rec.abort(); } catch { } resetMic(); return; }
+  if (!navigator.onLine) { toast(t('micOffline'), null, 'err'); return; }
+  let r;
+  try { r = new SR(); } catch { toast(t('micUnsupported'), null, 'err'); return; }
+  rec = r; r.lang = L() === 'ar' ? 'ar-SA' : 'en-US'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+  const base = ta.value ? ta.value.trimEnd() + ' ' : ''; let fin = '', heard = false;
+  const arm = ms => { clearTimeout(recTimer); recTimer = setTimeout(() => { if (rec === r) { try { r.abort(); } catch { } resetMic(); toast(t(heard ? 'micStopped' : 'micNoSpeech'), null, 'err'); } }, ms); };
+  r.onaudiostart = () => arm(12000);
+  r.onresult = e => { heard = true; arm(8000); let interim = ''; for (let k = e.resultIndex; k < e.results.length; k++) { const x = e.results[k]; if (x.isFinal) fin += x[0].transcript + ' '; else interim += x[0].transcript; } ta.value = base + fin + interim; autoGrow(ta); };
+  r.onerror = ev => {
+    if (rec !== r) return;
+    const code = ev.error || '';
+    if (code === 'not-allowed' || code === 'service-not-allowed') toast(t('micDenied'), null, 'err');
+    else if (code === 'no-speech') toast(t('micNoSpeech'), null, 'err');
+    else if (code === 'network') toast(t('micNetwork'), null, 'err');
+    else if (code !== 'aborted') toast(t('micError'), null, 'err');
+    resetMic();
+  };
+  r.onend = () => { if (rec !== r) return; resetMic(); const v = ($('#chatIn')?.value || '').trim(); if (v && heard && v !== base.trim()) chatSend(v); };
+  try { r.start(); arm(25000); } catch { resetMic(); toast(t('micError'), null, 'err'); return; }
   micUI();
 }
-function stopMic() { if (rec) { try { rec.stop(); } catch { } } }
+function stopMic() { if (rec) { try { rec.abort(); } catch { } resetMic(); } }
 function micUI() {
   const b = $('#micBtn'); if (b) b.classList.toggle('rec', !!rec);
   const s = $('#recState'); if (s) s.innerHTML = rec ? `<span class="wave">${'<i></i>'.repeat(7)}</span>${t('listening')}` : '';
@@ -1103,8 +1147,9 @@ function remindText(x, f) {
   if (L() === 'en') return `Hello ${honor},\nKindly ${f.what ? f.what.toLowerCase() : 'update me'} regarding “${x.title}”${f.due ? ` by ${fmt(f.due)}` : ''}.\nThank you,\n${me}`;
   return `السلام عليكم ${honor}،\nأرجو التكرّم ${f.what ? 'بـ' + f.what : 'بالإفادة'} بخصوص «${x.title}»${x.due ? `، علمًا بأن موعد التسليم ${wd(x.due)} ${fmt(x.due)}` : ''}.\nشاكرًا تعاونكم،\n${me}`;
 }
+const waNumber = c => { const d = String(c || '').replace(/[^\d+]/g, '').replace(/^\+/, '').replace(/^00/, '').replace(/^0(5\d{8})$/, '966$1').replace(/^0(1\d{9})$/, '20$1'); return /^\d{8,15}$/.test(d) ? d : ''; };
 function openRemind(x, f) {
-  const p = personById(f.person_id); const phone = String(p?.contact || '').replace(/[^\d+]/g, '').replace(/^\+/, '').replace(/^0(5\d{8})$/, '966$1');
+  const p = personById(f.person_id); const phone = waNumber(p?.contact);
   openSheet(t('remindTitle', { p: esc(pname(f.person_id)) }), `<div class="form"><label class="fld"><span>${t('remindMsg')}</span><textarea id="remTxt" rows="6" dir="auto">${esc(remindText(x, f))}</textarea></label>
     <div class="save-row"><button type="button" class="btn primary block" data-act="remwa" data-id="${x.id}" data-fu="${f.id}" data-phone="${esc(/^\d{8,15}$/.test(phone) ? phone : '')}">${t('sendWhatsApp')}</button><button type="button" class="btn block" data-act="remcopy" data-id="${x.id}" data-fu="${f.id}">${t('copyMsg')}</button></div>
     ${/^\d{8,15}$/.test(phone) ? '' : `<p class="note">${t('remindNoPhone')}</p>`}</div>`);
@@ -1369,6 +1414,7 @@ function routeHash() {
   closeAllLayers(); openTask(m[1]);
 }
 window.addEventListener('hashchange', routeHash);
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { const id = e.data && e.data.openTask; if (id && taskById(id)) { closeAllLayers(); openTask(id); } });
 
 /* ---------- people ---------- */
 function openPersonForm(p) {
@@ -1408,8 +1454,12 @@ function pushLayer(build) {
   const Lr = { el, rerender: () => {
     const sc = el.querySelector('.layer-b')?.scrollTop || 0;
     const kept = [...el.querySelectorAll('[data-keep]')];
+    const typed = [...el.querySelectorAll('input[name], textarea[name]')].filter(i => i.value && i.type !== 'hidden').map(i => ({ name: i.name, value: i.value }));
+    const act = document.activeElement, focusName = act && el.contains(act) && act.name ? act.name : null, pos = focusName ? act.selectionStart : null;
     el.innerHTML = build();
     kept.forEach(k => { const n = el.querySelector(`[data-keep="${k.dataset.keep}"]`); if (n) n.replaceWith(k); });
+    typed.forEach(x => { const n = el.querySelector(`[name="${x.name}"]`); if (n && !n.value) n.value = x.value; });
+    if (focusName) { const n = el.querySelector(`[name="${focusName}"]`); if (n) { n.focus({ preventScroll: true }); try { if (pos != null) n.setSelectionRange(pos, pos); } catch { } } }
     const b = el.querySelector('.layer-b'); if (b) b.scrollTop = sc;
   } };
   Lr.rerender();
@@ -1437,7 +1487,7 @@ function openTask(id) {
     const fus = (x.followups || []).slice().sort((a, b) => a.status === b.status ? ((a.due || '') < (b.due || '') ? -1 : 1) : a.status === 'open' ? -1 : 1);
     const logs = (x.log || []).slice().reverse();
     return topBar(t('taskDetails'), `<button type="button" class="iconbtn" data-act="edittask" data-id="${x.id}" aria-label="${esc(t('edit'))}">${ic.edit}</button>`) + `<div class="layer-b">
-      <div class="chips top">${statusPill(x)}${x.priority === 'hi' ? `<span class="pill hi">${t('prioHi')}</span>` : ''}${x.project ? `<span class="pill" dir="auto">${esc(x.project)}</span>` : ''}${x.archived ? `<span class="pill">${t('archived')}</span>` : ''}${x.ai?.st === 'done' ? `<button type="button" class="pill ai" data-act="aiundo" data-id="${x.id}">${sic('spark', 13)}${t('aiPill')} · ${t('undo')}</button>` : x.ai?.st === 'pending' && aiOn() && !UI.aiBlocked ? `<span class="pill ai">${sic('spark', 13)}${t('aiPending')}</span>` : ''}</div>
+      <div class="chips top">${statusPill(x)}${x.priority === 'hi' ? `<span class="pill hi">${t('prioHi')}</span>` : ''}${x.project ? `<span class="pill" dir="auto">${esc(x.project)}</span>` : ''}${x.archived ? `<span class="pill">${t('archived')}</span>` : ''}${x.ai?.st === 'done' ? `<button type="button" class="pill ai" data-act="aiundo" data-id="${x.id}">${sic('spark', 13)}${t('aiPill')} · ${t('undo')}</button>` : ''}</div>
       <h2 class="d-title" dir="auto">${esc(x.title)}</h2>
       ${x.details ? `<p class="d-text" dir="auto">${esc(x.details)}</p>` : ''}
       ${x.status === 'wait' && x.waiting_on ? `<div class="waitbox">${sic('clock', 16)}<span>${t('waitingFrom', { w: t('w_' + x.waiting_what), p: `<b dir="auto">${esc(pname(x.waiting_on))}</b>` })}</span></div>` : ''}
@@ -1491,6 +1541,7 @@ function openPerson(id) {
     const rel2 = sortTasks([...related].map(taskById).filter(x => x && isOpen(x)));
     return topBar(t('person'), `<button type="button" class="iconbtn" data-act="editperson" data-id="${p.id}" aria-label="${esc(t('edit'))}">${ic.edit}</button>`) + `<div class="layer-b">
       <div class="p-head"><span class="av xl">${esc(initials(p.name))}</span><div><h2 class="d-title" dir="auto" style="margin:0">${esc(p.name)}</h2>${p.org ? `<div class="sub" dir="auto">${esc(p.org)}</div>` : ''}${p.contact ? `<div class="sub" dir="auto">${esc(p.contact)}</div>` : ''}</div></div>
+      ${p.contact && /\d{7,}/.test(p.contact) ? `<div class="row" style="margin:-4px 0 12px"><a class="btn sm" href="tel:${esc(p.contact.replace(/[^\d+]/g, ''))}">${sic('phone', 16)}${t('call')}</a><a class="btn sm" href="https://wa.me/${esc(waNumber(p.contact))}" target="_blank" rel="noopener">${sic('send', 16)}WhatsApp</a></div>` : ''}
       ${p.notes ? `<p class="d-text" dir="auto">${esc(p.notes)}</p>` : ''}
       ${openF.length ? sec(t('openFollowups'), openF.length, openF.map(([x, f]) => fuRow(x, f)).join('')) : ''}
       ${waits.length ? sec(t('waitingOnThem'), waits.length, waits.map(x => taskCard(x, { noSwipe: true })).join('')) : ''}
@@ -1655,6 +1706,10 @@ async function importBackup(file) {
   let d; try { d = JSON.parse(await file.text()); } catch { toast(t('importBad'), null, 'err'); return; }
   if (!d || d.app !== 'rafeeq' || !Array.isArray(d.tasks)) { toast(t('importBad'), null, 'err'); return; }
   const conv = d.version === 2 ? { people: d.people || [], tasks: d.tasks || [], files: state.mode === 'cloud' ? (d.files || []) : [] } : convertV1(d);
+  const okId = v => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);
+  conv.tasks = conv.tasks.filter(x => x && okId(x.id) && typeof x.title === 'string').map(x => newTask({ ...x, kind: x.kind === 'log' ? 'log' : 'task', status: ['todo', 'prog', 'wait', 'hold', 'done', 'cancelled'].includes(x.status) ? x.status : 'todo', priority: ['hi', 'mid', 'lo'].includes(x.priority) ? x.priority : 'mid', role: ['exec', 'follow', 'both'].includes(x.role) ? x.role : 'exec', waiting_what: ['reply', 'decision', 'approval'].includes(x.waiting_what) ? x.waiting_what : 'reply', due: validDate(x.due), completed_on: validDate(x.completed_on), title: String(x.title).slice(0, 500), followups: Array.isArray(x.followups) ? x.followups : [], log: Array.isArray(x.log) ? x.log : [], recur: cleanRecur(x.recur) }));
+  conv.people = conv.people.filter(p => p && okId(p.id) && typeof p.name === 'string' && p.name.trim()).map(p => ({ ...newPerson(p.name.slice(0, 200)), ...p, name: p.name.trim().slice(0, 200) }));
+  conv.files = (conv.files || []).filter(f => f && okId(f.id) && typeof f.name === 'string').map(f => newFile({ ...f, name: String(f.name).slice(0, 300) }));
   confirmSheet(t('importQ', { t: conv.tasks.length, p: conv.people.length }), t('importAdd'), () => {
     const haveT = new Set(state.tasks.map(x => x.id)), haveP = new Set(state.people.map(p => p.id));
     const tasks = state.tasks.concat(conv.tasks.filter(x => !haveT.has(x.id)));
@@ -1686,7 +1741,6 @@ document.addEventListener('click', async e => {
       case 'lang': { const nl = L() === 'ar' ? 'en' : 'ar'; state.profile.lang = nl; if (state.mode) saveProfile({ lang: nl }); else applyLangTheme(); return renderAll(); }
       case 'setlang': { const nm = $('#onbName')?.value, jb = $('#onbJob')?.value; state.profile.lang = el.dataset.v; renderOnboarding(); applyLangTheme(); if (nm != null) $('#onbName').value = nm; if (jb != null) $('#onbJob').value = jb; return; }
       case 'theme': { const s = Object.assign({}, state.profile.settings); s.theme = s.theme === 'dark' ? 'light' : 'dark'; saveProfile({ settings: s }); return renderAll(); }
-      case 'ask-date': { const s = Object.assign({}, state.profile.settings); s.askDue = !s.askDue; saveProfile({ settings: s }); return renderMain(); }
       case 'capture': case 'chat': return openChat();
       case 'chatsend': return chatSend($('#chatIn')?.value);
       case 'chatq': return chatSend(el.dataset.q, el.dataset.l);
@@ -1706,13 +1760,14 @@ document.addEventListener('click', async e => {
       case 'remcopy': { await copyText($('#remTxt')?.value || ''); if (x && f) logReminder(x, f); return closeSheet(true); }
       case 'newtask': return openTaskForm();
       case 'newlog': return openLogForm();
+      case 'morelist': UI.listMax = (UI.listMax || 80) + 100; UI.keepScroll = true; return renderMain();
       case 'weekend': return openWeekendSheet();
       case 'wkset': { const st = Object.assign({}, state.profile.settings); st.wk = el.dataset.v.split(',').map(Number); saveProfile({ settings: st }); setWeekend(st.wk); closeSheet(true); toast(t('saved')); return renderAll(); }
       case 'notifs': return openNotifSheet();
       case 'notifon': { el.disabled = true; const f = $('#nForm'); return pushEnable().then(res => { el.disabled = false; if (res === 'ok') { saveNotifPrefs(f); UI.pushOn = true; toast(t('notifEnabled')); closeSheet(true); openNotifSheet(); renderMain(); } else toast(t(res === 'denied' ? 'notifDenied' : res === 'unsupported' ? 'notifUnsupported' : 'notifError'), null, 'err'); }); }
       case 'notiftest': { el.disabled = true; return pushTest().then(r => { el.disabled = false; toast(r && r.devices ? t('testSent') : t('notifError'), null, r && r.devices ? undefined : 'err'); }); }
       case 'notifoff': return pushDisable().then(() => { UI.pushOn = false; closeSheet(true); toast(t('notifOffDone')); renderMain(); });
-      case 'skiprec': { if (!x?.recur) return; const nd = recurNext(x.recur, x.due || T()); if (!nd) return; addLog(x, 'skipped', '', { from: x.due, to: nd }); x.due = nd; openFus(x).forEach(f => { f.due = diffDays(nd, T()) > 1 ? addWorkdays(nd, -1) : nd; }); putTask(x); return toast(t('skippedTo', { d: rel(nd) })); }
+      case 'skiprec': { if (!x?.recur) return; let nd = recurNext(x.recur, x.due || T()), g = 0; while (nd && nd <= T() && g++ < 400) nd = recurNext(x.recur, nd); if (!nd) return; addLog(x, 'skipped', '', { from: x.due, to: nd }); x.due = nd; openFus(x).forEach(f => { f.due = diffDays(nd, T()) > 1 ? addWorkdays(nd, -1) : nd; }); putTask(x); return toast(t('skippedTo', { d: rel(nd) })); }
       case 'chatfill': { if (!$('#chatIn')) openChat(); const ta = $('#chatIn'); if (ta) { ta.value = t('logStarter'); autoGrow(ta); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
       case 'ansmatch': { const pp = pending(); if (pp && pp.m.k === 'match') pp.d.closeTask = el.dataset.v === 'yes' ? pp.d.match : null; return renderChat(); }
       case 'closefus': { if (x && openFus(x).length) { openFus(x).forEach(f => { f.status = 'done'; f.closed_on = T(); f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: t('closedWithTask'), outcome: 'done' }); }); putTask(x); toast(t('fusClosed')); } el.disabled = true; el.closest('.ask')?.remove(); return; }
@@ -1799,8 +1854,8 @@ document.addEventListener('submit', e => {
   }
 });
 document.addEventListener('input', e => {
-  if (e.target.id === 'libQ') { UI.lq = e.target.value.trim(); clearTimeout(UI.lqt); UI.lqt = setTimeout(() => { const pos = e.target.selectionStart; renderMain(); const i = $('#libQ'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch { } } }, 150); return; }
-  if (e.target.id === 'taskQ') { UI.q = e.target.value.trim(); clearTimeout(UI.qt); UI.qt = setTimeout(() => { const pos = e.target.selectionStart; renderMain(); const i = $('#taskQ'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch { } } }, 150); }
+  if (e.target.id === 'libQ') { UI.lq = e.target.value; clearTimeout(UI.lqt); UI.lqt = setTimeout(() => renderListOnly('library', '#libList'), 120); return; }
+  if (e.target.id === 'taskQ') { UI.q = e.target.value; clearTimeout(UI.qt); UI.qt = setTimeout(() => renderListOnly('tasks', '#taskList'), 120); }
 });
 document.addEventListener('change', e => { if (e.target.id === 'ansDate' && validDate(e.target.value)) { const pp = pending(); if (pp) { pp.d.due = e.target.value; pp.d.noDue = false; pp.d.weekendOk = isWeekend(e.target.value); } return renderChat(); } if (e.target.dataset?.hsel) { const ids = selOf(UI.hym); if (e.target.checked) ids.add(e.target.dataset.hsel); else ids.delete(e.target.dataset.hsel); return; } if (e.target.id === 'libMonth') { UI.lmonth = e.target.value; return renderMain(); } if (e.target.id === 'importFile' && e.target.files[0]) { importBackup(e.target.files[0]); e.target.value = ''; } });
 document.addEventListener('keydown', e => {
@@ -1816,7 +1871,7 @@ document.addEventListener('keydown', e => {
 /* ================= live updates ================= */
 onChange(why => {
   if (why === 'auth') { if (state.mode === 'cloud') scheduleAI(4000); return renderAll(); }
-  if (why === 'profile') return renderAll();
+  if (why === 'profile') { if ($('#onbForm') || $('#sheet')?.classList.contains('on')) return; UI.keepScroll = true; return renderAll(); }
   if (why === 'drive') {
     if (state.drive.justLinked) { state.drive.justLinked = false; toast(t('driveLinked')); if (state.mode) return go('library'); }
     if (state.mode) { renderMain(); UI.layers.forEach(Lr => Lr.rerender()); }
@@ -1833,4 +1888,25 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 /* ================= boot ================= */
 renderAll();
 boot().catch(err => console.error(err)).finally(() => { UI.booting = false; renderAll(); });
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => { }));
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  const bootAt = Date.now();
+  let reloaded = false;
+  const WANT = 'rafeeq-' + (window.RAFEEQ_VERSION || '');
+  // a newer release is active (or just took over): reload at once on a fresh open, or offer a reload while the user is working
+  const newRelease = () => {
+    if (reloaded) return; reloaded = true;
+    if (/[?&](code|error)=/.test(location.search)) return;
+    let n = 0; try { n = +sessionStorage.getItem('rafeeq2.rl') || 0; sessionStorage.setItem('rafeeq2.rl', String(n + 1)); } catch { }
+    if (n >= 2) return; // never loop
+    if (Date.now() - bootAt < 8000 && !$('#sheet')?.classList.contains('on')) { location.reload(); return; }
+    toast(t('updateReady'), () => location.reload(), undefined, 15000); const b = $('#undoBtn'); if (b) b.textContent = t('updateNow');
+  };
+  navigator.serviceWorker.addEventListener('controllerchange', newRelease);
+  navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.version && e.data.version !== WANT) newRelease(); else if (e.data && e.data.version === WANT) { try { sessionStorage.removeItem('rafeeq2.rl'); } catch { } } });
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').then(reg => {
+    const ask = () => navigator.serviceWorker.controller?.postMessage('version');
+    navigator.serviceWorker.ready.then(ask); setTimeout(ask, 3000);
+    if (navigator.onLine) reg.update().catch(() => { });
+    setInterval(() => reg.update().catch(() => { }), 6 * 3600 * 1000);
+  }).catch(() => { }));
+}

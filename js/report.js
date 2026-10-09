@@ -16,21 +16,24 @@ const fileChip = f => `<span class="rp-file k-${esc(f.kind)}"><b>${KIND[f.kind] 
 export function reportHTML(s, { mode = 'screen' } = {}) {
   const lang = s.lang === 'en' ? 'en' : 'ar';
   const t = (k, v) => tr(lang, k, v);
-  const k = s.kpis || {};
-  const rate = k.onTimeRate == null ? '—' : Math.round(k.onTimeRate * 100) + '%';
-  const maxP = Math.max(1, ...(s.byProject || []).map(p => p.n));
-  const doneItems = (s.items || []).filter(x => x.kind === 'done');
-  const openItems = (s.items || []).filter(x => x.kind === 'open');
-  const logItems = (s.items || []).filter(x => x.kind === 'log');
+  const num = v => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0; };
+  const k0 = s.kpis || {}, k = { done: num(k0.done), fuClosed: num(k0.fuClosed), open: num(k0.open), logs: num(k0.logs), onTimeRate: k0.onTimeRate == null ? null : Number(k0.onTimeRate) };
+  const rate = k.onTimeRate == null || !Number.isFinite(k.onTimeRate) ? '—' : Math.round(Math.min(1, Math.max(0, k.onTimeRate)) * 100) + '%';
+  const byProject = (Array.isArray(s.byProject) ? s.byProject : []).map(p => ({ name: String(p?.name ?? ''), n: num(p?.n) }));
+  const maxP = Math.max(1, ...byProject.map(p => p.n));
+  const items = (Array.isArray(s.items) ? s.items : []).filter(x => x && typeof x === 'object').slice(0, 300);
+  const doneItems = items.filter(x => x.kind === 'done');
+  const openItems = items.filter(x => x.kind === 'open');
+  const logItems = items.filter(x => x.kind === 'log');
   const item = x => `<article class="rp-item">
-      <div class="rp-item-h"><h4 dir="auto">${esc(x.title)}</h4>${x.kind === 'done' ? (x.onTime ? `<span class="rp-tag ok">${t('rpOnTime')}</span>` : '') : x.priority === 'hi' ? `<span class="rp-tag hi">${t('prioHi')}</span>` : ''}</div>
+      <div class="rp-item-h"><h4 dir="auto">${esc(x.title)}</h4>${x.kind === 'done' ? (x.onTime === true ? `<span class="rp-tag ok">${t('rpOnTime')}</span>` : '') : x.priority === 'hi' ? `<span class="rp-tag hi">${t('prioHi')}</span>` : ''}</div>
       <div class="rp-meta">${x.project ? `<span class="rp-proj" dir="auto">${esc(x.project)}</span>` : ''}${x.kind !== 'open' ? `<span>${t('rpDoneOn', { d: fmtD(lang, x.completed_on) })}</span>` : `${x.status ? `<span>${esc(t(x.status))}</span>` : ''}${x.due ? `<span>${t('rpDue', { d: fmtD(lang, x.due) })}</span>` : ''}`}</div>
-      ${x.steps_total ? `<div class="rp-prog"><i style="width:${Math.round(100 * x.steps_done / x.steps_total)}%"></i></div><div class="rp-meta"><span>${t('stepsOf', { a: x.steps_done, b: x.steps_total })}</span></div>` : ''}
+      ${num(x.steps_total) ? `<div class="rp-prog"><i style="width:${Math.min(100, Math.round(100 * num(x.steps_done) / num(x.steps_total)))}%"></i></div><div class="rp-meta"><span>${t('stepsOf', { a: num(x.steps_done), b: num(x.steps_total) })}</span></div>` : ''}
       ${x.details ? `<p class="rp-txt" dir="auto">${esc(x.details)}</p>` : ''}
       ${x.result ? `<p class="rp-res" dir="auto"><b>${t('result')}:</b> ${esc(x.result)}</p>` : ''}
       ${x.update ? `<p class="rp-txt" dir="auto"><b>${t('rpLastUpdate')}:</b> ${esc(x.update)}</p>` : ''}
-      ${(x.people || []).length ? `<div class="rp-meta"><span>${t('rpWith')}: <span dir="auto">${x.people.map(esc).join('، ')}</span></span></div>` : ''}
-      ${(x.files || []).length ? `<div class="rp-files">${x.files.map(fileChip).join('')}</div>` : ''}
+      ${Array.isArray(x.people) && x.people.length ? `<div class="rp-meta"><span>${t('rpWith')}: <span dir="auto">${x.people.slice(0, 12).map(p => esc(String(p))).join('، ')}</span></span></div>` : ''}
+      ${Array.isArray(x.files) && x.files.length ? `<div class="rp-files">${x.files.slice(0, 20).map(f => fileChip({ name: String(f?.name ?? ''), kind: String(f?.kind ?? '') })).join('')}</div>` : ''}
     </article>`;
   return `<div class="rp ${mode === 'print' ? 'rp-print' : ''}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}" lang="${lang}">
     <header class="rp-head">
@@ -42,13 +45,13 @@ export function reportHTML(s, { mode = 'screen' } = {}) {
       </div>
     </header>
     <section class="rp-kpis ${k.logs ? 'n5' : ''}">
-      <div class="rp-kpi"><b>${k.done ?? 0}</b><span>${t('rpKDone')}</span></div>
+      <div class="rp-kpi"><b>${k.done}</b><span>${t('rpKDone')}</span></div>
       <div class="rp-kpi accent"><b>${rate}</b><span>${t('rpKRate')}</span></div>
-      <div class="rp-kpi"><b>${k.fuClosed ?? 0}</b><span>${t('rpKFu')}</span></div>
-      <div class="rp-kpi"><b>${k.open ?? 0}</b><span>${t('rpKOpen')}</span></div>
+      <div class="rp-kpi"><b>${k.fuClosed}</b><span>${t('rpKFu')}</span></div>
+      <div class="rp-kpi"><b>${k.open}</b><span>${t('rpKOpen')}</span></div>
       ${k.logs ? `<div class="rp-kpi"><b>${k.logs}</b><span>${t('rpKLogs')}</span></div>` : ''}
     </section>
-    ${(s.byProject || []).length > 1 ? `<section class="rp-sec"><h3>${t('rpByProject')}</h3><div class="rp-bars">${s.byProject.map(p => `<div class="rp-bar"><span class="rp-bl" dir="auto">${esc(p.name || t('rpNoProject'))}</span><span class="rp-bt"><i style="width:${Math.max(4, Math.round(100 * p.n / maxP))}%"></i></span><b>${p.n}</b></div>`).join('')}</div></section>` : ''}
+    ${byProject.length > 1 ? `<section class="rp-sec"><h3>${t('rpByProject')}</h3><div class="rp-bars">${byProject.map(p => `<div class="rp-bar"><span class="rp-bl" dir="auto">${esc(p.name || t('rpNoProject'))}</span><span class="rp-bt"><i style="width:${Math.max(4, Math.round(100 * p.n / maxP))}%"></i></span><b>${p.n}</b></div>`).join('')}</div></section>` : ''}
     ${doneItems.length ? `<section class="rp-sec"><h3>${t('rpAchievements')} <span class="rp-n">${doneItems.length}</span></h3><div class="rp-list">${doneItems.map(item).join('')}</div></section>` : ''}
     ${logItems.length ? `<section class="rp-sec"><h3>${t('rpOther')} <span class="rp-n">${logItems.length}</span></h3><div class="rp-list">${logItems.map(item).join('')}</div></section>` : ''}
     ${openItems.length ? `<section class="rp-sec"><h3>${t('rpInProgress')} <span class="rp-n">${openItems.length}</span></h3><div class="rp-list">${openItems.map(item).join('')}</div></section>` : ''}

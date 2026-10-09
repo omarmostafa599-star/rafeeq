@@ -83,7 +83,7 @@ main{padding:8px 16px calc(110px + env(safe-area-inset-bottom,0px));max-width:76
 @media (max-width:400px){ .hdr h1{font-size:23px} }
 
 /* nav: bottom bar on phones, sidebar on wide screens */
-#nav{position:fixed;bottom:0;inset-inline:0;z-index:20;background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr 76px 1fr 1fr;align-items:end;padding:6px 6px calc(8px + env(safe-area-inset-bottom,0px))}
+#nav{position:fixed;bottom:0;inset-inline:0;z-index:20;background:var(--card);border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr 76px 1fr 1fr;align-items:end;padding:6px 6px calc(8px + env(safe-area-inset-bottom,0px))}
 .nav-brand,.nav-foot{display:none}
 .tab{position:relative;border:none;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11.5px;color:var(--ink-3);padding:6px 0;font-weight:500}
 .tab svg{width:23px;height:23px}
@@ -414,13 +414,13 @@ span.pill.ai{cursor:default;opacity:.85}
 .hrow input{width:20px;height:20px;margin:3px 0 0;accent-color:var(--accent);flex:none}
 .hrow .body{flex:1;min-width:0;display:flex;flex-direction:column} .hrow .t{font-weight:600;line-height:1.5;overflow-wrap:anywhere}
 .harvest{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
-.hact{position:sticky;bottom:calc(-40px - env(safe-area-inset-bottom,0px));display:flex;gap:8px;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(10px);padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));margin-top:16px;border-top:1px solid var(--line)}
+.hact{position:sticky;bottom:calc(-40px - env(safe-area-inset-bottom,0px));display:flex;gap:8px;background:var(--paper);padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));margin-top:16px;border-top:1px solid var(--line)}
 .hact .btn{flex:1;min-width:0;padding:0 8px}
 .share-row{padding:12px 14px} .share-row .t{font-weight:600} .share-row .row{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap} .share-row .grow{flex:1}
 .linkbox{background:var(--paper);border:1px solid var(--line-2);border-radius:12px;padding:10px 12px;font-size:13px;word-break:break-all;font-family:ui-monospace,Consolas,monospace;margin:4px 0}
 #present{position:fixed;inset:0;z-index:80;background:#EEF1F5;overflow:auto;-webkit-overflow-scrolling:touch}
 #present[hidden]{display:none}
-.pr-bar{position:sticky;top:0;z-index:2;display:flex;gap:8px;align-items:center;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;background:rgba(238,241,245,.92);backdrop-filter:blur(10px);border-bottom:1px solid #E1E5EC;color:#16213A}
+.pr-bar{position:sticky;top:0;z-index:2;display:flex;gap:8px;align-items:center;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;background:#EEF1F5;border-bottom:1px solid #E1E5EC;color:#16213A}
 .pr-bar .grow{flex:1} .pr-bar .btn{background:#fff;color:#16213A;border-color:#C9CFD9} .pr-bar .btn.primary{background:#1F3366;border-color:#1F3366;color:#fff}
 .pr-body{padding:20px 16px 60px}
 body.presenting{overflow:hidden}
@@ -508,7 +508,7 @@ body.presenting{overflow:hidden}
   #app{display:grid;grid-template-columns:248px 1fr}
   #app.bare{display:block}
   [dir=ltr] #app{grid-template-columns:248px 1fr}
-  #nav{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:18px 12px;border-top:none;border-inline-end:1px solid var(--line);background:var(--card);backdrop-filter:none}
+  #nav{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:18px 12px;border-top:none;border-inline-end:1px solid var(--line);background:var(--card)}
   .nav-brand{display:flex;align-items:center;gap:10px;padding:2px 8px 18px;font-family:var(--f-display);font-size:18px;order:-2}
   .addbtn{order:-1;width:auto;height:46px;border-radius:12px;transform:none;display:flex;gap:8px;justify-content:center;margin-bottom:14px;box-shadow:none;font-weight:600}
   .addbtn .lbl{display:inline} .addbtn svg{width:20px;height:20px}
@@ -538,7 +538,7 @@ body.presenting{overflow:hidden}
 </style>
 <script src="config.js"></script>
 <script src="vendor/supabase.js"></script>
-<script>window.RAFEEQ_VERSION = '2.5.0';</script>
+<script>window.RAFEEQ_VERSION = '2.5.1';</script>
 </head>
 <body>
 <div class="shell" id="shell" dir="rtl">

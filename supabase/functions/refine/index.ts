@@ -2,7 +2,7 @@
 // Secrets (Supabase → Edge Functions → Secrets):  GEMINI_API_KEY   (optional: GEMINI_MODEL)
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const ALLOWED_ORIGINS = ['https://omarmostafa599-star.github.io'];
+const ALLOWED_ORIGINS = ['https://myrafeeq.github.io', 'https://omarmostafa599-star.github.io'];
 const MODELS = [Deno.env.get('GEMINI_MODEL') || 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];
 const DAILY_CAP = 300;
 

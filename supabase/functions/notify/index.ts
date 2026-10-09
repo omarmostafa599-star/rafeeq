@@ -4,8 +4,8 @@
 // Web Push encryption (RFC 8291, aes128gcm) and VAPID (RFC 8292) use WebCrypto only.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const ALLOWED_ORIGINS = ['https://omarmostafa599-star.github.io'];
-const CONTACT = 'https://omarmostafa599-star.github.io/rafeeq/';
+const ALLOWED_ORIGINS = ['https://myrafeeq.github.io', 'https://omarmostafa599-star.github.io'];
+const CONTACT = 'https://myrafeeq.github.io/';
 const OPEN = ['todo', 'prog', 'wait', 'hold'];
 
 function cors(req: Request) {
@@ -95,7 +95,7 @@ async function eventsFor(admin: any, uid: string) {
   const L = prof?.lang === 'en' ? TX.en : TX.ar;
   const now = localNow(nt.tz || 'Asia/Riyadh');
   const wk: number[] = Array.isArray(st.wk) && st.wk.length ? st.wk : [5, 6];
-  const { data: tasks } = await admin.from('tasks').select('id,title,status,due,due_time,remind_min,followups,kind,archived').eq('user_id', uid).eq('deleted', false).in('status', OPEN);
+  const { data: tasks } = await admin.from('tasks').select('id,title,status,due,due_time,remind_min,followups,kind,archived').eq('user_id', uid).eq('deleted', false).in('status', OPEN).eq('kind', 'task').eq('archived', false).limit(2000);
   const { data: ppl } = await admin.from('people').select('id,name').eq('user_id', uid);
   const pname = new Map((ppl || []).map((p: { id: string; name: string }) => [p.id, p.name]));
   const open = (tasks || []).filter((x: { kind?: string; archived?: boolean }) => x.kind !== 'log' && !x.archived);
@@ -149,13 +149,14 @@ Deno.serve(async (req) => {
     if (!kv || req.headers.get('x-cron-key') !== kv.v) return json(req, { error: 'forbidden' }, 403);
     const { data: subs } = await admin.from('push_subs').select('*');
     const byUser = new Map<string, Sub[]>(); (subs || []).forEach((s: Sub) => { if (!byUser.has(s.user_id)) byUser.set(s.user_id, []); byUser.get(s.user_id)!.push(s); });
-    let sent = 0, dropped = 0;
+    let sent = 0, dropped = 0; const t0 = Date.now();
     for (const [uid, list] of byUser) {
+      if (Date.now() - t0 > 20000) break; // stay under the scheduler's timeout; the rest is picked up next run
       const ev = await eventsFor(admin, uid); if (!ev.length) continue;
-      const { data: done } = await admin.from('notif_sent').select('key').eq('user_id', uid).in('key', ev.map(e => e.key));
-      const seen = new Set((done || []).map((d: { key: string }) => d.key));
-      const fresh = ev.filter(e => !seen.has(e.key)).slice(0, 6); if (!fresh.length) continue;
-      await admin.from('notif_sent').upsert(fresh.map(e => ({ user_id: uid, key: e.key })), { onConflict: 'user_id,key', ignoreDuplicates: true });
+      // claim atomically (ON CONFLICT DO NOTHING + RETURNING): two overlapping runs can never send the same key twice
+      const { data: claimed } = await admin.from('notif_sent').upsert(ev.slice(0, 6).map(e => ({ user_id: uid, key: e.key })), { onConflict: 'user_id,key', ignoreDuplicates: true }).select('key');
+      const mine = new Set((claimed || []).map((d: { key: string }) => d.key));
+      const fresh = ev.filter(e => mine.has(e.key)); if (!fresh.length) continue;
       for (const e of fresh) for (const s of list) {
         const st = await push(s, e.msg, v).catch(() => 0);
         if (st >= 200 && st < 300) { sent++; await admin.from('push_subs').update({ last_ok: new Date().toISOString() }).eq('endpoint', s.endpoint); }

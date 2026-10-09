@@ -27,14 +27,17 @@ export const state = {
   mode: null,            // 'cloud' | 'local' | null (signed out)
   user: null,            // { id, email, name }
   profile: { display_name: '', job_title: '', lang: 'ar', settings: {} },
-  tasks: [], people: [], files: [],
+  tasks: [], people: [], files: [], rev: 0,
   sync: { status: 'idle', pending: 0, last: null, error: null },
   drive: { linked: null, justLinked: false },   // null = unknown yet
 };
 
 const listeners = new Set();
 export const onChange = fn => listeners.add(fn);
-const emit = (why) => listeners.forEach(fn => { try { fn(why); } catch (e) { console.error(e); } });
+const emitNow = (why) => listeners.forEach(fn => { try { fn(why); } catch (e) { console.error(e); } });
+// several changes in one tick (e.g. saving 5 drafts) → one re-render
+const queued = new Set();
+const emit = (why) => { if (queued.has(why)) return; queued.add(why); queueMicrotask(() => { queued.delete(why); emitNow(why); }); };
 
 /* ---------- local storage ---------- */
 const scope = () => state.mode === 'cloud' ? state.user.id : 'local';
@@ -47,30 +50,43 @@ const TABLES = ['people', 'tasks', 'files'];
 const listOf = tbl => tbl === 'tasks' ? state.tasks : tbl === 'people' ? state.people : state.files;
 
 let outbox = new Set();
-function saveLocal() {
+let saveTimer = null;
+function saveLocal() { state.rev++; if (saveTimer) return true; saveTimer = setTimeout(saveLocalNow, 0); return true; }
+function saveLocalNow() {
+  clearTimeout(saveTimer); saveTimer = null;
   const ok = lsSet(K.cache(), { tasks: state.tasks, people: state.people, files: state.files, profile: state.profile });
-  lsSet(K.outbox(), [...outbox]);
+  if (ok) lsSet(K.outbox(), [...outbox]);  // never queue ids whose data could not be stored
   state.sync.pending = outbox.size;
   if (!ok) { state.sync.error = 'storage'; emit('sync'); }
   return ok;
 }
+window.addEventListener('pagehide', () => { if (saveTimer) saveLocalNow(); });
+// another tab of the same account changed the cache → take it over
+window.addEventListener('storage', e => { if (!state.mode || e.key !== K.cache()) return; loadLocal(); emit('data'); });
 function loadLocal() {
   const c = lsGet(K.cache(), null);
   state.tasks = c?.tasks || []; state.people = c?.people || []; state.files = c?.files || [];
   if (c?.profile) state.profile = Object.assign({ display_name: '', job_title: '', lang: 'ar', settings: {} }, c.profile);
   outbox = new Set(lsGet(K.outbox(), []));
-  state.sync.pending = outbox.size;
+  state.sync.pending = outbox.size; state.rev++;
 }
 
 /* ---------- session ---------- */
+function storedSession() {
+  try { const k = Object.keys(localStorage).find(x => /^sb-.*-auth-token$/.test(x)); const v = k && JSON.parse(localStorage.getItem(k)); return v && v.user && v.access_token ? v : null; } catch { return null; }
+}
 export async function boot() {
   if (sb) {
-    const { data } = await sb.auth.getSession();
-    if (/[?&](code|error)=/.test(location.search)) history.replaceState(null, '', location.pathname);
-    if (data?.session) { await enterCloud(data.session); return; }
     sb.auth.onAuthStateChange((ev, session) => {
       if (ev === 'SIGNED_IN' && session && state.mode !== 'cloud') enterCloud(session);
+      if (ev === 'SIGNED_OUT' && state.mode === 'cloud') signOut({ wipe: false });
     });
+    const { data, error } = await sb.auth.getSession();
+    if (/[?&](code|error)=/.test(location.search)) history.replaceState(null, '', location.pathname);
+    let session = data?.session;
+    // offline or a flaky link: the token could not be refreshed, but the account and its cached data are here → open anyway
+    if (!session && (!navigator.onLine || error)) { const st = storedSession(); if (st) session = st; }
+    if (session) { await enterCloud(session); return; }
   }
   if (lsGet('rafeeq2.mode', null) === 'local') { enterLocal(); return; }
   state.mode = null; emit('auth');
@@ -88,6 +104,7 @@ async function enterCloud(session) {
   if (!state.profile.display_name && state.user.name) state.profile.display_name = state.user.name;
   state.drive.linked = lsGet('rafeeq2.drive.' + u.id, null);
   emit('auth');
+  if (!navigator.onLine) { setSync('offline'); return; }
   await captureDriveGrant(session);
   await syncNow();
   pullProfile();
@@ -99,6 +116,7 @@ export async function signInGoogle() {
   return sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo, queryParams: { prompt: 'select_account' } } });
 }
 export async function signOut({ wipe = true } = {}) {
+  clearTimeout(saveTimer); saveTimer = null;
   if (state.mode === 'cloud' && sb) { try { await sb.auth.signOut(); } catch { } }
   if (wipe) { lsDel(K.cache()); lsDel(K.outbox()); lsDel(K.cursor()); }
   lsDel('rafeeq2.mode');
@@ -212,7 +230,7 @@ export async function pushTest() {
   const { data, error } = await sb.functions.invoke('notify', { body: { op: 'test' } });
   return error ? null : data;
 }
-export async function invokeAssist(payload, ms = 15000) {
+export async function invokeAssist(payload, ms = 22000) {
   if (!sb || state.mode !== 'cloud') throw { code: 'local' };
   if (!navigator.onLine) throw { code: 'offline' };
   let timer;
@@ -293,14 +311,20 @@ async function flush() {
     if (!COLS[tbl]) { outbox.delete(k); continue; }
     const obj = listOf(tbl).find(x => x.id === id);
     if (!obj) { outbox.delete(k); continue; }
-    const row = {}; COLS[tbl].forEach(c => { if (obj[c] !== undefined) row[c] = obj[c]; }); if (tbl === 'tasks') row.kind = obj.kind === 'log' ? 'log' : 'task';
+    const base = tbl === 'tasks' ? newTask() : tbl === 'people' ? newPerson('-') : newFile();
+    const row = {}; COLS[tbl].forEach(c => { row[c] = obj[c] !== undefined ? obj[c] : base[c]; }); if (tbl === 'tasks') row.kind = obj.kind === 'log' ? 'log' : 'task';
+    if (tbl === 'people') row.name = String(row.name || '-').slice(0, 200); if (tbl === 'files') row.name = String(row.name || '').slice(0, 300); if (tbl === 'tasks') row.title = String(row.title || '-').slice(0, 500);
     rows[tbl].push(row); snap.set(k, obj.client_ts);
   }
   try {
     for (const tbl of TABLES) {
       for (let i = 0; i < rows[tbl].length; i += 200) {
-        const { error } = await sb.from(tbl).upsert(rows[tbl].slice(i, i + 200), { onConflict: 'id' });
-        if (error) throw error;
+        const batch = rows[tbl].slice(i, i + 200);
+        const { error } = await sb.from(tbl).upsert(batch, { onConflict: 'id' });
+        if (!error) continue;
+        if (/JWT|auth|401|403|fetch|network/i.test(error.message || '')) throw error;
+        // a data error: push row by row so one bad row cannot block everything else
+        for (const r of batch) { const { error: e1 } = await sb.from(tbl).upsert(r, { onConflict: 'id' }); if (e1) { console.warn('sync: row rejected', tbl, r.id, e1.message); outbox.delete(tbl + ':' + r.id); state.sync.lastRowError = e1.message; } }
       }
     }
     for (const [k, ts] of snap) {
