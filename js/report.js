@@ -41,8 +41,8 @@ export function reportHTML(s, { mode = 'screen' } = {}) {
     <header class="rp-head">
       <div class="rp-mark">${lang === 'ar' ? 'ر' : 'R'}</div>
       <div class="rp-hd">
-        <div class="rp-eyebrow">${t('rpEyebrow')}</div>
-        <h1>${t('rpTitle', { m: monthName(lang, s.period) })}</h1>
+        <div class="rp-eyebrow">${s.project ? t('rpProjEyebrow', { m: monthName(lang, s.period) }) : t('rpEyebrow')}</div>
+        <h1 dir="auto">${s.project ? esc(String(s.project)) : t('rpTitle', { m: monthName(lang, s.period) })}</h1>
         <div class="rp-who" dir="auto">${esc(s.owner?.name || '')}${s.owner?.title ? ` · ${esc(s.owner.title)}` : ''}</div>
       </div>
     </header>

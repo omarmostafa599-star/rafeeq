@@ -1,7 +1,7 @@
 // رفيق — offline support & updates. Bump VERSION on every release.
 // Shell files are served from the cache first (instant start, works offline) and refreshed in the background.
 // A new release = new VERSION → fresh download on install → the open pages are told to reload.
-const VERSION = 'rafeeq-2.6.1';
+const VERSION = 'rafeeq-2.6.2';
 const SHELL = ['./', './index.html', './config.js', './js/version.js', './js/app.js', './js/data.js', './js/parse.js', './js/i18n.js', './js/drive.js', './js/report.js', './vendor/supabase.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 // versioned URLs defeat the hosting CDN's edge cache too (not only the browser cache), so a new release never precaches an old file
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u + (u.includes('?') ? '&' : '?') + 'v=' + VERSION, { cache: 'reload' })))).then(() => self.skipWaiting())); });

@@ -434,6 +434,27 @@ body.presenting{overflow:hidden}
   body.printing,body.printing.presenting{overflow:visible!important;height:auto!important}
 }
 
+/* weekly agenda & project */
+.seg.four{grid-template-columns:repeat(4,1fr)}
+.wk-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}
+.wk-nav b{font-size:14.5px}
+.wk-late{display:flex;align-items:center;gap:6px;width:100%;border:1px solid color-mix(in srgb,var(--late) 35%,var(--line));background:var(--late-soft);color:var(--late);border-radius:12px;padding:8px 12px;font-weight:600;font-size:13.5px;margin-bottom:10px}
+.wk{display:grid;gap:10px}
+.wk-day{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.wk-day.today{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.wk-day.past{opacity:.65}
+.wk-h{display:flex;align-items:center;gap:8px}
+.wk-h b{font-size:15px} .wk-h .num{color:var(--ink-3);font-size:13px} .wk-h .grow{flex:1}
+.wk-item{display:flex;align-items:baseline;gap:8px;width:100%;text-align:start;background:none;border:none;border-top:1px dashed var(--line);padding:8px 0 6px;color:inherit}
+.wk-item:first-of-type{margin-top:6px}
+.wk-item .tm{min-width:56px;color:var(--accent-2);font-weight:700;font-size:13px}
+.wk-item .t{flex:1;min-width:0;font-weight:600;font-size:14.5px}
+.wk-item .who{color:var(--ink-3);font-size:12.5px;white-space:nowrap}
+.wk-item.fu .t{font-weight:500}
+.wk-empty{color:var(--ink-3);font-size:13px;padding:4px 0 0}
+.projlink{cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:3px}
+button.pill.projlink{border:none;display:inline-flex;align-items:center;gap:4px;text-decoration:none}
+
 /* «متابعاتي» */
 .seg.two{grid-template-columns:1fr 1fr}
 .seg .cnt{margin-inline-start:4px;line-height:18px;font-size:11px}

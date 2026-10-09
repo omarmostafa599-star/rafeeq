@@ -262,7 +262,7 @@ function taskCard(x, opts = {}) {
   const key = x.status === 'wait' && x.waiting_on ? `<span>${sic('clock', 13)} ${t('waitingFrom', { w: t('w_' + (x.waiting_what || 'reply')), p: esc(pname(x.waiting_on)) })}</span>`
     : x.priority === 'hi' && !done ? `<span class="pill hi">${t('prioHi')}</span>`
     : nf ? `<span>${sic('users', 13)} ${esc(pname(nf.person_id).split(' ').slice(0, 2).join(' '))}${openFus(x).length > 1 ? ` +${openFus(x).length - 1}` : ''}</span>`
-    : x.project ? `<span dir="auto">${esc(x.project)}</span>` : '';
+    : x.project && !opts.noProject ? `<span class="projlink" data-proj="${esc(x.project)}" role="link" dir="auto">${esc(x.project)}</span>` : '';
   const meta = [opts.status || isLog(x) || (!when && x.status === 'prog') ? statusPill(x) : '', when, key].filter(Boolean).join('');
   const card = `<div class="tcard ${done ? 'is-done' : ''} ${isLog(x) ? 'is-log' : ''}" data-open="${x.id}" role="button" tabindex="0">
       ${stripe ? `<span class="stripe ${stripe}"></span>` : ''}
@@ -306,6 +306,73 @@ function mfCard(g) {
       <div class="mf-items">${g.items.slice(0, 6).map(row).join('')}${g.items.length > 6 ? `<button type="button" class="linkbtn" data-person="${g.pid}">${t('showMore', { n: g.items.length - 6 })}</button>` : ''}</div>
       ${phone ? `<div class="mf-acts"><a class="btn sm" href="tel:${esc(phone.replace(/[^\d+]/g, ''))}">${sic('phone', 15)}${t('call')}</a><a class="btn sm" href="https://wa.me/${esc(waNumber(phone))}" target="_blank" rel="noopener">${sic('send', 15)}WhatsApp</a></div>` : ''}
     </section>`;
+}
+function tasksHead(full) {
+  const pc = id => live().filter(x => isOpen(x) && (x.waiting_on === id || openFus(x).some(f => f.person_id === id))).length;
+  const ppl = people().filter(p => pc(p.id)).slice(0, 12);
+  const openN = live().filter(isOpen).length;
+  return `<header class="hdr"><div class="grow"><h1>${t('navTasks')}</h1><div class="sub">${plural(openN, 'openTasks')}</div></div><button type="button" class="btn primary sm desk" data-act="chat">${ic.plus}${t('newTask')}</button><button type="button" class="iconbtn addman mob" data-act="chat" aria-label="${esc(t('newTask'))}">${ic.plus}</button>${meBtn()}</header>
+      ${full ? `<label class="search">${ic.search}<input type="search" id="taskQ" value="${esc(UI.q)}" placeholder="${esc(t('searchTasks'))}" aria-label="${esc(t('searchTasks'))}" dir="auto"></label>` : ''}
+      ${full && ppl.length ? `<div class="people-row">${ppl.map(p => `<button type="button" class="pchip ${UI.personF === p.id ? 'on' : ''}" data-pf="${p.id}"><span class="av">${esc(initials(p.name))}</span><span class="nm" dir="auto">${esc(p.name.replace(/^(?:م|د|أ|ا)\.\s*/, '').split(' ')[0])}</span><i class="num">${pc(p.id)}</i></button>`).join('')}</div>` : ''}
+      <div class="seg four" role="tablist">${[['active', 'segActive'], ['wait', 'segWaitShort'], ['week', 'segWeek'], ['done', 'segDone']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${UI.seg === k}" class="${UI.seg === k ? 'on' : ''}" data-seg="${k}">${t(l)}</button>`).join('')}</div>`;
+}
+/* weekly agenda: workdays only, items ordered by time — what the week looks like at a glance */
+function weekHTML() {
+  const off = UI.wk || 0, td = T();
+  let base = weekRange()[0]; if (isWeekend(td) && [0, 1, 2, 3, 4, 5, 6].map(i => addDays(base, i)).filter(d => !isWeekend(d)).every(d => d < td)) base = addDays(base, 7); // on the weekend, «this week» is the coming one
+  const start = addDays(base, off * 7);
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(start, i)).filter(d => !isWeekend(d));
+  const open = live().filter(x => isOpen(x) && !x.archived && !isLog(x));
+  const late = off === 0 ? open.filter(isLate).length : 0;
+  const itemsOf = d => {
+    const out = [];
+    open.forEach(x => {
+      if (x.due === d) out.push({ x, time: x.due_time || '', title: x.title, who: x.status === 'wait' && x.waiting_on ? pname(x.waiting_on) : '' });
+      openFus(x).forEach(f => { if (f.due === d) out.push({ x, time: f.time || '', title: f.what || x.title, who: pname(f.person_id), fu: true }); });
+    });
+    return out.sort((a, b) => (a.time || '99') < (b.time || '99') ? -1 : (a.time || '99') > (b.time || '99') ? 1 : 0);
+  };
+  const row = it => `<button type="button" class="wk-item ${it.fu ? 'fu' : ''}" data-open="${it.x.id}"><span class="tm num">${it.time ? fmtTime(it.time) : ''}</span><span class="t" dir="auto">${esc(it.title)}</span>${it.who ? `<span class="who" dir="auto">${sic(it.fu ? 'users' : 'clock', 12)} ${esc(it.who.split(' ').slice(0, 2).join(' '))}</span>` : ''}</button>`;
+  const dayBox = d => { const its = itemsOf(d); const [dd, mm] = [pd(d).getDate(), pd(d).getMonth() + 1];
+    return `<section class="wk-day ${d === td ? 'today' : ''} ${d < td ? 'past' : ''}"><div class="wk-h"><b>${wd(d)}</b><span class="num">${fmtShort(d)}</span>${its.length ? `<span class="cnt">${its.length}</span>` : ''}<span class="grow"></span>${d >= td ? `<button type="button" class="iconbtn sm" data-act="chatfill" data-q="${dd}/${mm} " aria-label="${esc(t('newTask'))}" title="${esc(t('newTask'))}">${sic('plus', 16)}</button>` : ''}</div>
+      ${its.length ? its.map(row).join('') : `<div class="wk-empty">${t('wkFree')}</div>`}</section>`; };
+  return `<div class="wk-nav"><button type="button" class="iconbtn" data-wk="${off - 1}" aria-label="${esc(t('prevWeek'))}">${sic('back', 18)}</button><b class="num">${fmtShort(days[0] || start)} – ${fmtShort(days[days.length - 1] || addDays(start, 6))}</b><button type="button" class="iconbtn" data-wk="${off + 1}" aria-label="${esc(t('nextWeek'))}">${sic('back', 18).replace('<svg', '<svg style="transform:scaleX(-1)"')}</button></div>
+    ${off !== 0 ? `<button type="button" class="linkbtn center" data-wk="0">${t('thisWeek')}</button>` : ''}
+    ${late ? `<button type="button" class="wk-late" data-seg="active">${sic('flag', 15)} ${t('wkLate', { n: plural(late, 'tasks') })}</button>` : ''}
+    <div class="wk">${days.map(dayBox).join('')}</div>`;
+}
+/* project page: everything under one project name, plus a project report */
+const projKey = s => normAr(String(s || '').trim());
+function projectItems(name) {
+  const k = projKey(name), ym = thisYM();
+  const all = live().filter(x => !x.archived && projKey(x.project) === k);
+  const open = sortTasks(all.filter(x => isOpen(x) && !isLog(x)));
+  const done = all.filter(x => !isOpen(x) && (x.completed_on || '').startsWith(ym)).sort((a, b) => (b.completed_on || '') > (a.completed_on || '') ? 1 : -1);
+  return { all, open, late: open.filter(isLate), wait: open.filter(x => x.status === 'wait'), rest: open.filter(x => !isLate(x) && x.status !== 'wait'), done, ym };
+}
+function openProject(name) {
+  if (!name) return;
+  pushLayer(() => {
+    const p = projectItems(name);
+    const sub = [t('projOpen', { n: p.open.length }), p.late.length ? t('projLate', { n: p.late.length }) : '', t('projDoneMonth', { n: p.done.length })].filter(Boolean).join(' · ');
+    const block = (title, list, cls = '') => list.length ? sec(title, list.length, list.map(x => taskCard(x, { noSwipe: true, status: !isOpen(x), noProject: true })).join(''), cls) : '';
+    return topBar(t('projTitle')) + `<div class="layer-b">
+      <header class="hdr"><div class="grow"><h1 dir="auto">${esc(name)}</h1><div class="sub">${sub}</div></div></header>
+      ${p.all.length ? '' : `<div class="empty small"><p>${t('noTasksHere')}</p></div>`}
+      ${block(t('secLate'), p.late, 'late')}${block(t('segWait'), p.wait)}${block(t('projNext'), p.rest)}${block(t('projDoneThisMonth'), p.done)}
+      ${p.open.length || p.done.length ? `<div class="save-row"><button type="button" class="btn primary block" data-act="projreport" data-v="${esc(name)}">${ic.spark}${t('projReport')}</button></div>` : ''}
+    </div>`;
+  });
+}
+function projectSnapshot(name) {
+  const p = projectItems(name);
+  const withDue = p.done.filter(x => x.due && !isLog(x)), onTime = withDue.filter(x => x.completed_on <= x.due);
+  let fuClosed = 0; p.all.forEach(x => (x.followups || []).forEach(f => { if (f.status === 'done' && (f.closed_on || '').startsWith(p.ym)) fuClosed++; }));
+  const item = (x, kind) => ({ kind, title: x.title, project: '', priority: x.priority, status: kind === 'open' ? stKey(x.status) : '', due: x.due, completed_on: x.completed_on, onTime: !!(x.due && x.completed_on && x.completed_on <= x.due), result: (x.result || '').slice(0, 600), details: (x.details || '').slice(0, 600), update: kind === 'open' ? lastNote(x) : '', steps_done: x.steps_done || 0, steps_total: x.steps_total || 0, people: [...new Set([x.waiting_on, ...(x.followups || []).map(f => f.person_id)].filter(Boolean).map(pname))].slice(0, 6), files: filesOfTask(x.id).map(f => ({ name: f.name, kind: kindOf(f) })) });
+  const doneT = p.done.filter(x => !isLog(x)), logs = p.done.filter(isLog);
+  return { v: 1, lang: L(), period: p.ym, project: name.slice(0, 120), generated_at: nowISO(), generated_on: T(), owner: { name: state.profile.display_name || '', title: state.profile.job_title || '' },
+    kpis: { done: doneT.length, onTimeRate: withDue.length ? onTime.length / withDue.length : null, fuClosed, open: p.open.length, logs: logs.length }, byProject: [],
+    items: [...doneT.map(x => item(x, 'done')), ...logs.map(x => item(x, 'log')), ...p.open.map(x => item(x, 'open'))].slice(0, 300) };
 }
 const sec = (title, n, body, cls = '') => `<section class="sec"><div class="sec-h"><h3>${title}</h3>${n != null ? `<span class="cnt ${cls}">${n}</span>` : ''}</div><div class="stack">${body}</div></section>`;
 const emptyBox = (title, text, btn = '') => `<div class="empty"><div class="empty-ic">${ic.note}</div><h3>${title}</h3><p>${text}</p>${btn}</div>`;
@@ -505,6 +572,7 @@ const VIEWS = {
     return h;
   },
   tasks() {
+    if (UI.seg === 'week') return tasksHead(false) + weekHTML();
     let list = live();
     if (UI.seg === 'active') list = list.filter(x => isOpen(x) && x.status !== 'wait' && !x.archived);
     if (UI.seg === 'wait') list = list.filter(x => isOpen(x) && !x.archived && x.status === 'wait');
@@ -516,13 +584,7 @@ const VIEWS = {
     const shown = list.slice(0, UI.listMax || 80);
     const listHTML = `${shown.length ? shown.map(x => taskCard(x, { status: UI.seg !== 'active' })).join('') : `<div class="empty small"><p>${UI.q.trim() || UI.personF ? t('noMatch') : t('noTasksHere')}</p></div>`}${list.length > shown.length ? `<button type="button" class="linkbtn center" data-act="morelist">${t('showMore', { n: list.length - shown.length })}</button>` : ''}`;
     if (UI.listOnly) return listHTML;
-    const pc = id => live().filter(x => isOpen(x) && (x.waiting_on === id || openFus(x).some(f => f.person_id === id))).length;
-    const ppl = people().filter(p => pc(p.id)).slice(0, 12);
-    const openN = live().filter(isOpen).length;
-    return `<header class="hdr"><div class="grow"><h1>${t('navTasks')}</h1><div class="sub">${plural(openN, 'openTasks')}</div></div><button type="button" class="btn primary sm desk" data-act="chat">${ic.plus}${t('newTask')}</button><button type="button" class="iconbtn addman mob" data-act="chat" aria-label="${esc(t('newTask'))}">${ic.plus}</button>${meBtn()}</header>
-      <label class="search">${ic.search}<input type="search" id="taskQ" value="${esc(UI.q)}" placeholder="${esc(t('searchTasks'))}" aria-label="${esc(t('searchTasks'))}" dir="auto"></label>
-      ${ppl.length ? `<div class="people-row">${ppl.map(p => `<button type="button" class="pchip ${UI.personF === p.id ? 'on' : ''}" data-pf="${p.id}"><span class="av">${esc(initials(p.name))}</span><span class="nm" dir="auto">${esc(p.name.replace(/^(?:م|د|أ|ا)\.\s*/, '').split(' ')[0])}</span><i class="num">${pc(p.id)}</i></button>`).join('')}</div>` : ''}
-      <div class="seg" role="tablist">${[['active', 'segActive'], ['wait', 'segWait'], ['done', 'segDone']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${UI.seg === k}" class="${UI.seg === k ? 'on' : ''}" data-seg="${k}">${t(l)}</button>`).join('')}</div>
+    return tasksHead(true) + `
       ${UI.personF ? `<div class="chips filter"><button type="button" class="chip on" data-pf="${UI.personF}" dir="auto">${esc(pname(UI.personF))} ${sic('x', 14)}</button></div>` : ''}
       <div class="stack" id="taskList">${listHTML}</div>
       ${UI.seg === 'done' || UI.seg === 'archived' ? `<button type="button" class="linkbtn center" data-seg="${UI.seg === 'archived' ? 'done' : 'archived'}">${UI.seg === 'archived' ? t('backToDone') : t('showArchived')}</button>` : ''}`;
@@ -1572,7 +1634,7 @@ function openTask(id) {
     const fus = (x.followups || []).slice().sort((a, b) => a.status === b.status ? ((a.due || '') < (b.due || '') ? -1 : 1) : a.status === 'open' ? -1 : 1);
     const logs = (x.log || []).slice().reverse();
     return topBar(t('taskDetails'), `<button type="button" class="iconbtn" data-act="edittask" data-id="${x.id}" aria-label="${esc(t('edit'))}">${ic.edit}</button>`) + `<div class="layer-b">
-      <div class="chips top">${statusPill(x)}${x.priority === 'hi' ? `<span class="pill hi">${t('prioHi')}</span>` : ''}${x.project ? `<span class="pill" dir="auto">${esc(x.project)}</span>` : ''}${x.archived ? `<span class="pill">${t('archived')}</span>` : ''}${x.ai?.st === 'done' ? `<button type="button" class="pill ai" data-act="aiundo" data-id="${x.id}">${sic('spark', 13)}${t('aiPill')} · ${t('undo')}</button>` : ''}</div>
+      <div class="chips top">${statusPill(x)}${x.priority === 'hi' ? `<span class="pill hi">${t('prioHi')}</span>` : ''}${x.project ? `<button type="button" class="pill projlink" data-proj="${esc(x.project)}" dir="auto">${sic('folder', 12)} ${esc(x.project)}</button>` : ''}${x.archived ? `<span class="pill">${t('archived')}</span>` : ''}${x.ai?.st === 'done' ? `<button type="button" class="pill ai" data-act="aiundo" data-id="${x.id}">${sic('spark', 13)}${t('aiPill')} · ${t('undo')}</button>` : ''}</div>
       <h2 class="d-title" dir="auto">${esc(x.title)}</h2>
       ${x.details ? `<p class="d-text" dir="auto">${esc(x.details)}</p>` : ''}
       ${x.status === 'wait' && x.waiting_on ? `<div class="waitbox">${sic('clock', 16)}<span>${t('waitingFrom', { w: t('w_' + (x.waiting_what || 'reply')), p: `<b dir="auto">${esc(pname(x.waiting_on))}</b>` })}</span></div>` : ''}
@@ -1604,7 +1666,7 @@ function openTask(id) {
 function logDetail(x) {
   const fs = state.mode === 'cloud' ? filesOfTask(x.id) : [];
   return topBar(t('logDetails'), `<button type="button" class="iconbtn" data-act="edittask" data-id="${x.id}" aria-label="${esc(t('edit'))}">${ic.edit}</button>`) + `<div class="layer-b">
-      <div class="chips top">${statusPill(x)}${x.project ? `<span class="pill" dir="auto">${esc(x.project)}</span>` : ''}</div>
+      <div class="chips top">${statusPill(x)}${x.project ? `<button type="button" class="pill projlink" data-proj="${esc(x.project)}" dir="auto">${sic('folder', 12)} ${esc(x.project)}</button>` : ''}</div>
       <h2 class="d-title" dir="auto">${esc(x.title)}</h2>
       ${x.details ? `<p class="d-text" dir="auto">${esc(x.details)}</p>` : ''}
       <div class="donebox"><b>${t('loggedOn', { d: `${wd(x.completed_on || T())} ${fmt(x.completed_on || T())}` })}</b></div>
@@ -1698,8 +1760,8 @@ function openHarvest(ym = thisYM()) {
     </div>`;
   });
 }
-function openPresent() {
-  const snap = snapshot(UI.hym || thisYM());
+function openPresent(snap0) {
+  const snap = snap0 || snapshot(UI.hym || thisYM()); UI.presentSnap = snap0 || null;
   if (!snap.items.length) return toast(t('nothingSelected'), null, 'err');
   ensureReportCSS();
   let el = $('#present'); if (!el) { el = document.createElement('div'); el.id = 'present'; document.body.appendChild(el); }
@@ -1707,8 +1769,8 @@ function openPresent() {
   el.hidden = false; document.body.classList.add('presenting'); el.scrollTop = 0;
 }
 function closePresent() { const el = $('#present'); if (el) el.hidden = true; document.body.classList.remove('presenting'); if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); }
-function printReport() {
-  const snap = snapshot(UI.hym || thisYM());
+function printReport(snap0) {
+  const snap = snap0 || snapshot(UI.hym || thisYM());
   if (!snap.items.length) return toast(t('nothingSelected'), null, 'err');
   ensureReportCSS();
   let pa = $('#printArea'); if (!pa) { pa = document.createElement('div'); pa.id = 'printArea'; document.body.appendChild(pa); }
@@ -1826,6 +1888,8 @@ document.addEventListener('click', async e => {
   if ((el = q('[data-tab]'))) { e.preventDefault(); return go(el.dataset.tab); }
   if ((el = q('[data-jump]'))) { document.getElementById(el.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if ((el = q('[data-seg]'))) { UI.seg = el.dataset.seg; return renderMain(); }
+  if ((el = q('[data-wk]'))) { UI.wk = +el.dataset.wk || 0; return renderMain(); }
+  if ((el = q('[data-proj]'))) { e.stopPropagation(); return openProject(el.dataset.proj); }
   if ((el = q('[data-pview]'))) { UI.pview = el.dataset.pview; return renderMain(); }
   if ((el = q('[data-pf]'))) { UI.personF = UI.personF === el.dataset.pf ? null : el.dataset.pf; return renderMain(); }
   if ((el = q('[data-ltype]'))) { UI.ltype = el.dataset.ltype; return renderMain(); }
@@ -1869,7 +1933,7 @@ document.addEventListener('click', async e => {
       case 'notiftest': { el.disabled = true; return pushTest().then(r => { el.disabled = false; toast(r && r.devices ? t('testSent') : t('notifError'), null, r && r.devices ? undefined : 'err'); }); }
       case 'notifoff': return pushDisable().then(() => { UI.pushOn = false; closeSheet(true); toast(t('notifOffDone')); renderMain(); });
       case 'skiprec': { if (!x?.recur) return; let nd = recurNext(x.recur, x.due || T()), g = 0; while (nd && nd <= T() && g++ < 400) nd = recurNext(x.recur, nd); if (!nd) return; addLog(x, 'skipped', '', { from: x.due, to: nd }); x.due = nd; openFus(x).forEach(f => { f.due = diffDays(nd, T()) > 1 ? addWorkdays(nd, -1) : nd; }); putTask(x); return toast(t('skippedTo', { d: rel(nd) })); }
-      case 'chatfill': { if (!$('#chatIn')) openChat(); const ta = $('#chatIn'); if (ta) { ta.value = t('logStarter'); autoGrow(ta); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
+      case 'chatfill': { if (!$('#chatIn')) openChat(); const ta = $('#chatIn'); if (ta) { ta.value = el.dataset.q || t('logStarter'); autoGrow(ta); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
       case 'ansmatch': { const pp = pending(); if (pp && pp.m.k === 'match') pp.d.closeTask = el.dataset.v === 'yes' ? pp.d.match : null; return renderChat(); }
       case 'closefus': { if (x && openFus(x).length) { openFus(x).forEach(f => { f.status = 'done'; f.closed_on = T(); f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: '', outcome: 'closed_with_task' }); }); putTask(x); toast(t('fusClosed')); } el.disabled = true; el.closest('.ask')?.remove(); return; }
       case 'newperson': return openPersonForm();
@@ -1908,9 +1972,10 @@ document.addEventListener('click', async e => {
       case 'harvest': return openHarvest();
       case 'hm': { const n = shiftYM(UI.hym, +el.dataset.d); if (n > thisYM()) return; UI.hym = n; UI.layers.forEach(Lr => Lr.rerender()); return; }
       case 'present': return openPresent();
+      case 'projreport': return openPresent(projectSnapshot(el.dataset.v));
       case 'closepresent': return closePresent();
       case 'fullscreen': { const pe = $('#present'); if (pe && !document.fullscreenElement) pe.requestFullscreen?.().catch(() => { }); else document.exitFullscreen?.(); return; }
-      case 'pdf': return printReport();
+      case 'pdf': return printReport($('#present') && !$('#present').hidden ? UI.presentSnap : null);
       case 'sharelink': return openShareSheet();
       case 'createshare': return createShare(el);
       case 'copylink': return copyText(el.dataset.url);
