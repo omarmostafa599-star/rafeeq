@@ -209,7 +209,7 @@ function renderNav() {
   const tab = (k, icon, label) => `<button type="button" class="tab ${UI.tab === k ? 'on' : ''}" data-tab="${k}" ${UI.tab === k ? 'aria-current="page"' : ''}>${icon}<span>${label}</span>${k === 'today' && badgeCount() ? `<i class="dot num">${badgeCount()}</i>` : ''}</button>`;
   $('#nav').innerHTML = `<div class="nav-brand"><span class="brand-mark sm">${L() === 'ar' ? 'ر' : 'R'}</span><b>${t('appName')}</b></div>
     ${tab('today', ic.today, t('navToday'))}${tab('tasks', ic.list, t('navTasks'))}
-    <button type="button" class="addbtn" data-act="chat" aria-label="${esc(t('assistant'))}">${ic.spark}<span class="lbl">${t('askRafeeq')}</span></button><button type="button" class="tab deskonly" data-act="newtask">${ic.plus}<span>${t('newTask')}</span></button>
+    <button type="button" class="addbtn" data-act="chat" aria-label="${esc(t('assistant'))}">${ic.spark}<span class="lbl">${t('askRafeeq')}</span></button>
     ${tab('people', ic.users, t('navPeople'))}${tab('library', ic.folder, t('navLibrary'))}${tab('more', ic.more, t('navMore')).replace('class="tab', 'class="tab deskonly')}
     <div class="nav-foot">${syncChip()}</div>`;
 }
@@ -256,17 +256,14 @@ function taskCard(x, opts = {}) {
   const nf = openFus(x).sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : 1)[0];
   const stripe = isLate(x) ? 'late' : x.status === 'wait' ? 'wait' : '';
   const done = !isOpen(x);
-  const meta = [
-    opts.status || isLog(x) ? statusPill(x) : '',
-    duePill(x),
-    x.due_time && isOpen(x) ? `<span class="num">${sic('clock', 13)} ${fmtTime(x.due_time)}</span>` : '',
-    x.recur ? `<span class="rc" title="${esc(recurLabel(x.recur))}">${sic('repeat', 13)}</span>` : '',
-    x.priority === 'hi' && isOpen(x) ? `<span class="pill hi">${t('prioHi')}</span>` : '',
-    x.status === 'wait' && x.waiting_on ? `<span>${t('waitingFrom', { w: t('w_' + (x.waiting_what || 'reply')), p: esc(pname(x.waiting_on)) })}</span>` : '',
-    nf && x.status !== 'wait' ? `<span>${sic('users', 13)} ${esc(pname(nf.person_id).split(' ').slice(0, 2).join(' '))} · ${rel(nf.due)}</span>` : '',
-    x.project ? `<span dir="auto">${esc(x.project)}</span>` : '',
-    done && x.completed_on ? `<span>${t('doneOn', { d: fmtShort(x.completed_on) })}</span>` : '',
-  ].filter(Boolean).join('');
+  // one line, two facts at most: when, and the single thing that matters most about it (details live in the task page)
+  const when = done ? (x.completed_on ? `<span>${t('doneOn', { d: fmtShort(x.completed_on) })}</span>` : '')
+    : (x.due || x.due_time ? (isLate(x) ? `<span class="pill late">${lateTxt(x.due)}</span>` : `<span class="num">${x.due ? rel(x.due) : ''}${x.due_time ? `${x.due ? ' · ' : ''}${fmtTime(x.due_time)}` : ''}${x.recur ? ` ${sic('repeat', 12)}` : ''}</span>`) : '');
+  const key = x.status === 'wait' && x.waiting_on ? `<span>${sic('clock', 13)} ${t('waitingFrom', { w: t('w_' + (x.waiting_what || 'reply')), p: esc(pname(x.waiting_on)) })}</span>`
+    : x.priority === 'hi' && !done ? `<span class="pill hi">${t('prioHi')}</span>`
+    : nf ? `<span>${sic('users', 13)} ${esc(pname(nf.person_id).split(' ').slice(0, 2).join(' '))}${openFus(x).length > 1 ? ` +${openFus(x).length - 1}` : ''}</span>`
+    : x.project ? `<span dir="auto">${esc(x.project)}</span>` : '';
+  const meta = [opts.status || isLog(x) || (!when && x.status === 'prog') ? statusPill(x) : '', when, key].filter(Boolean).join('');
   const card = `<div class="tcard ${done ? 'is-done' : ''} ${isLog(x) ? 'is-log' : ''}" data-open="${x.id}" role="button" tabindex="0">
       ${stripe ? `<span class="stripe ${stripe}"></span>` : ''}
       ${x.status === 'cancelled' ? '<span class="chk" aria-hidden="true"></span>' : `<button type="button" class="chk ${x.status === 'done' ? 'on' : ''}" ${isOpen(x) ? `data-act="quickdone" data-id="${x.id}" aria-label="${esc(t('complete'))}"` : 'tabindex="-1" aria-hidden="true"'}>${x.status === 'done' ? ic.check : ''}</button>`}
@@ -458,7 +455,7 @@ const VIEWS = {
     const why = !pick ? '' : isLate(pick) ? lateTxt(pick.due) : pick.due === td ? t('dueToday') : pick.priority === 'hi' ? t('prioHi') : pick.status === 'prog' ? t('stProg') : pick.due ? t('nearestDue') : '';
     let hijri = ''; try { hijri = new Intl.DateTimeFormat((L() === 'ar' ? 'ar-SA' : 'en') + '-u-ca-islamic-umalqura-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date()); } catch { }
     const name = (state.profile.display_name || '').split(' ')[0];
-    let h = `<header class="hdr"><div class="grow"><div class="sub">${esc(hijri)}</div><h1>${wd(td)}${L() === 'ar' ? '،' : ','} ${fmt(td)}</h1>${name ? `<div class="hello">${t('hello', { n: esc(name) })}</div>` : ''}</div><div class="hdr-side">${syncChip()}</div><button type="button" class="iconbtn addman mob" data-act="newtask" aria-label="${esc(t('newTask'))}">${ic.plus}</button>${meBtn()}</header>`;
+    let h = `<header class="hdr"><div class="grow"><div class="sub">${esc(hijri)}</div><h1>${wd(td)}${L() === 'ar' ? '،' : ','} ${fmt(td)}</h1>${name ? `<div class="hello">${t('hello', { n: esc(name) })}</div>` : ''}</div><div class="hdr-side">${syncChip()}</div><button type="button" class="iconbtn addman mob" data-act="chat" aria-label="${esc(t('newTask'))}">${ic.plus}</button>${meBtn()}</header>`;
     if (!live().length) {
       return h + emptyBox(t('emptyTitle'), t('emptyText'), `<button type="button" class="btn primary lg" data-act="chat">${ic.spark}${t('addFirst')}</button>`) + leftoversBanner();
     }
@@ -492,7 +489,7 @@ const VIEWS = {
     const pc = id => live().filter(x => isOpen(x) && (x.waiting_on === id || openFus(x).some(f => f.person_id === id))).length;
     const ppl = people().filter(p => pc(p.id)).slice(0, 12);
     const openN = live().filter(isOpen).length;
-    return `<header class="hdr"><div class="grow"><h1>${t('navTasks')}</h1><div class="sub">${plural(openN, 'openTasks')}</div></div><button type="button" class="btn primary sm desk" data-act="newtask">${ic.plus}${t('newTask')}</button><button type="button" class="iconbtn addman mob" data-act="newtask" aria-label="${esc(t('newTask'))}">${ic.plus}</button>${meBtn()}</header>
+    return `<header class="hdr"><div class="grow"><h1>${t('navTasks')}</h1><div class="sub">${plural(openN, 'openTasks')}</div></div><button type="button" class="btn primary sm desk" data-act="chat">${ic.plus}${t('newTask')}</button><button type="button" class="iconbtn addman mob" data-act="chat" aria-label="${esc(t('newTask'))}">${ic.plus}</button>${meBtn()}</header>
       <label class="search">${ic.search}<input type="search" id="taskQ" value="${esc(UI.q)}" placeholder="${esc(t('searchTasks'))}" aria-label="${esc(t('searchTasks'))}" dir="auto"></label>
       ${ppl.length ? `<div class="people-row">${ppl.map(p => `<button type="button" class="pchip ${UI.personF === p.id ? 'on' : ''}" data-pf="${p.id}"><span class="av">${esc(initials(p.name))}</span><span class="nm" dir="auto">${esc(p.name.replace(/^(?:م|د|أ|ا)\.\s*/, '').split(' ')[0])}</span><i class="num">${pc(p.id)}</i></button>`).join('')}</div>` : ''}
       <div class="seg" role="tablist">${[['active', 'segActive'], ['wait', 'segWait'], ['done', 'segDone']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${UI.seg === k}" class="${UI.seg === k ? 'on' : ''}" data-seg="${k}">${t(l)}</button>`).join('')}</div>
@@ -545,6 +542,8 @@ const VIEWS = {
         <button type="button" data-act="lang"><span class="mi">${ic.globe}</span><span class="grow">${t('language')}<small>${L() === 'ar' ? 'العربية' : 'English'}</small></span><span class="val">${L() === 'ar' ? 'English' : 'العربية'}</span></button>
         <button type="button" data-act="theme"><span class="mi">${ic.moon}</span><span class="grow">${t('appearance')}<small>${(p.settings || {}).theme === 'dark' ? t('themeDark') : t('themeLight')}</small></span></button>
         <button type="button" data-act="weekend"><span class="mi">${ic.cal}</span><span class="grow">${t('wkTitle')}<small>${wkLabel()}</small></span></button>
+        <button type="button" data-act="asksrc"><span class="mi">${ic.users}</span><span class="grow">${t('askSrcSetting')}<small>${t(askSource() ? 'askSrcOn' : 'askSrcOff')}</small></span><span class="switch ${askSource() ? 'on' : ''}" aria-hidden="true"></span></button>
+        <button type="button" data-act="tour"><span class="mi">${ic.info}</span><span class="grow">${t('tourAgain')}<small>${t('tourAgainHint')}</small></span></button>
       </div>
       ${state.mode === 'cloud' ? `<div class="menu"><button type="button" data-act="notifs"><span class="mi">${ic.bell}</span><span class="grow">${t('notifTitle')}<small>${notifSummary()}</small></span></button></div>` : ''}
       ${state.mode === 'cloud' ? `<div class="menu"><button type="button" data-act="shares"><span class="mi">${ic.link}</span><span class="grow">${t('sharesTitle')}<small>${t('sharesHint')}</small></span></button></div>` : ''}
@@ -698,6 +697,7 @@ function confirmSheet(msg, okLabel, onOk, danger = true) {
 /* ================= assistant chat: capture (one or many tasks) + questions ================= */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 const SELF = '@self';
+const askSource = () => (state.profile.settings || {}).askSource === true; // off by default: a task with no stated assigner is the user's own
 const srcLabel = s => !s ? '' : s === SELF ? t('srcSelf') : s;
 const aiOn = () => state.mode === 'cloud' && (state.profile.settings || {}).ai !== false;
 function deviceId() { try { let d = localStorage.getItem('rafeeq2.dev'); if (!d) { d = uuid(); localStorage.setItem('rafeeq2.dev', d); } return d; } catch { return 'x'; } }
@@ -803,6 +803,7 @@ function fromLog(title, date, raw, project = '') {
 /** First missing piece of a draft, or null when it can be saved. */
 function missingOf(d) {
   if (isLogD(d)) return d.match && d.closeTask === undefined ? { k: 'match' } : null;
+  if (!d.source && !askSource()) d.source = SELF;
   let i = d.people.findIndex(p => p.ref.kind === 'generic' && p.role !== 'related'); if (i >= 0) return { k: 'generic', i };
   i = d.people.findIndex(p => p.ref.kind === 'amb'); if (i >= 0) return { k: 'amb', i };
   if (!d.due && !d.noDue) return { k: 'due' };
@@ -858,7 +859,7 @@ function draftCard(d, n, active) {
     d.recur ? `<span class="chip sm">${sic('repeat', 13)}${recurLabel(d.recur)}</span>` : '',
     d.priority === 'hi' ? `<span class="chip sm hi">${t('prioHi')}</span>` : '',
     `<span class="chip sm">${roleTxt}</span>`,
-    d.source ? `<span class="chip sm">${t('srcShort')}: ${esc(srcLabel(d.source))}</span>` : `<span class="chip sm missing">${t('srcShort')}: ${L() === 'ar' ? '؟' : '?'}</span>`,
+    d.source === SELF && !askSource() ? '' : d.source ? `<span class="chip sm">${t('srcShort')}: ${esc(srcLabel(d.source))}</span>` : `<span class="chip sm missing">${t('srcShort')}: ${L() === 'ar' ? '؟' : '?'}</span>`,
     ...ppl.map(p => `<span class="chip sm ${p.ref.kind === 'generic' || p.ref.kind === 'amb' ? 'missing' : ''}">${sic(p.role === 'waiting' ? 'clock' : 'users', 13)}<span dir="auto">${esc(refName(p.ref))}</span>${p.ref.kind === 'new' && p.ref.desc ? `<small dir="auto">· ${esc(p.ref.desc)}</small>` : ''}${p.ref.kind === 'new' ? ` <em>${t('newBadge')}</em>` : ''}</span>`),
     d.project ? `<span class="chip sm" dir="auto">${esc(d.project)}</span>` : '',
   ].filter(Boolean).join('');
@@ -1166,7 +1167,7 @@ function logReminder(x, f) { f.log = f.log || []; f.log.push({ id: uuid(), at: n
 
 /* ---------- full task form ---------- */
 function openTaskForm(x, pre = null) {
-  const isNew = !x; const v = x ? (pre?.status ? { ...x, status: pre.status } : x) : newTask(pre ? { title: pre.title || '', due: pre.due || null, due_time: pre.time || null, recur: pre.recur || null, priority: pre.priority || 'mid', role: pre.role || 'exec', source: pre.source || '', project: pre.project || '' } : {});
+  const isNew = !x; const v = x ? (pre?.status ? { ...x, status: pre.status } : x) : newTask(pre ? { title: pre.title || '', due: pre.due || null, due_time: pre.time || null, recur: pre.recur || null, priority: pre.priority || 'mid', role: pre.role || 'exec', source: pre.source || (askSource() ? '' : SELF), project: pre.project || '' } : { source: askSource() ? '' : SELF });
   const rc = v.recur || null, rcDom = rc && rc.dom !== 'last' && rc.dom ? rc.dom : pd(v.due || T()).getDate(), rcDays = rc?.days?.length ? rc.days : [pd(v.due || T()).getDay()];
   const projects = [...new Set(live().map(y => (y.project || '').trim()).filter(Boolean))];
   const srcOpts = [...new Set([...recentSources(), ...people().map(p => p.name)])];
@@ -1188,7 +1189,7 @@ function openTaskForm(x, pre = null) {
         <div class="opts" id="rfDays" ${rc?.f === 'weekly' ? '' : 'hidden'}>${[0, 1, 2, 3, 4, 5, 6].map(d => `<button type="button" class="chip ${rcDays.includes(d) ? 'on' : ''}" data-rd="${d}">${wdName(d)}</button>`).join('')}</div>
         <div class="grid2" id="rfDom" ${rc?.f === 'monthly' || rc?.f === 'quarterly' ? '' : 'hidden'}><label class="fld"><span>${t('rcDay')}</span><input type="number" name="rdom" min="1" max="31" inputmode="numeric" value="${rcDom}" ${rc?.dom === 'last' ? 'disabled' : ''}></label><label class="chk-line"><input type="checkbox" name="rlast" ${rc?.dom === 'last' ? 'checked' : ''}> ${t('rcLastWork')}</label></div>
         <small class="note" id="rfNote" ${rc ? '' : 'hidden'}>${t('rcNote')}</small></div>
-      <div class="fld"><span>${t('fSource')} <b class="req">*</b></span><div class="src-row"><input name="source" list="srcList" value="${esc(srcLabel(v.source))}" placeholder="${esc(t('fSourcePh'))}" dir="auto"><button type="button" class="chip ${v.source === SELF ? 'on' : ''}" data-srcself>${t('srcSelf')}</button></div></div>
+      <div class="fld"><span>${t('fSource')} ${askSource() ? '<b class="req">*</b>' : `<em>${t('optional')}</em>`}</span><div class="src-row"><input name="source" list="srcList" value="${esc(srcLabel(v.source))}" placeholder="${esc(t('fSourcePh'))}" dir="auto"><button type="button" class="chip ${v.source === SELF ? 'on' : ''}" data-srcself>${t('srcSelf')}</button></div></div>
       <div class="fld"><span>${t('fRole')} <b class="req">*</b></span><div class="seg2" id="roleSeg">${['exec', 'follow', 'both'].map(r => `<button type="button" class="${v.role === r ? 'on' : ''}" data-role="${r}">${t('role_' + r)}</button>`).join('')}</div><input type="hidden" name="role" value="${v.role}"></div>
       <label class="fld" id="whoBox" ${v.role === 'exec' ? 'hidden' : ''}><span>${t('fWho')} <b class="req">*</b></span><input name="who" list="pplList" value="${esc(whoNames.join(L() === 'ar' ? '، ' : ', '))}" placeholder="${esc(t('personPhMulti'))}" dir="auto"></label>
       ${v.status === 'done' ? '' : `<label class="fld"><span>${t('fStatus')}</span><select name="status" id="fStatus">${stOpts.map(s => `<option value="${s}" ${v.status === s ? 'selected' : ''}>${t(stKey(s))}</option>`).join('')}</select></label>`}
@@ -1229,7 +1230,7 @@ function openTaskForm(x, pre = null) {
         if (recur && !dueV) dueV = recurNext(recur, addDays(T(), -1));
         if (!dueV && !noDue) { f.elements.due.focus(); return err(t('reqDue')); }
         const srcRaw = (fd.get('source') || '').trim();
-        if (!srcRaw) { f.elements.source.focus(); return err(t('reqSource')); }
+        if (!srcRaw && askSource()) { f.elements.source.focus(); return err(t('reqSource')); }
         const role = fd.get('role') || 'exec';
         const whoList = role === 'exec' ? [] : String(fd.get('who') || '').split(/[،,+؛;]/).map(s => s.trim()).filter(Boolean);
         if (role !== 'exec' && !whoList.length) { f.elements.who.focus(); return err(t('reqWho')); }
@@ -1243,7 +1244,7 @@ function openTaskForm(x, pre = null) {
         tgt.recur = recur;
         if (fd.get('status')) tgt.status = fd.get('status');
         tgt.role = role; tgt.project = (fd.get('project') || '').trim();
-        tgt.source = /^(أنا|انا|me|self)$/i.test(srcRaw) || srcRaw === t('srcSelf') ? SELF : srcRaw;
+        tgt.source = !srcRaw || /^(أنا|انا|me|self)$/i.test(srcRaw) || srcRaw === t('srcSelf') ? SELF : srcRaw;
         tgt.steps_total = Math.max(0, Math.min(50, parseInt(fd.get('steps_total') || '0', 10) || 0)); tgt.steps_done = Math.min(tgt.steps_done || 0, tgt.steps_total);
         tgt.notes = (fd.get('notes') || '').trim();
         if (tgt.status === 'wait') { tgt.waiting_on = getOrCreatePerson(fd.get('waiting_on')); if (!tgt.waiting_on) tgt.status = prevSt === 'wait' ? 'prog' : prevSt; tgt.waiting_what = fd.get('waiting_what') || 'reply'; } else tgt.waiting_on = null;
@@ -1376,6 +1377,34 @@ function fuAgain(x0, f0, d) {
   f.log = f.log || []; f.log.push({ id: uuid(), at: nowISO(), date: T(), text: note, outcome: 'again', next: d });
   f.due = d; addLog(x, 'fu_again', note, { person_id: f.person_id, due: d });
   putTask(x); closeSheet(true); toast(t('remindOn', { d: rel(d) }));
+}
+
+/* ---------- first-use tour: three short screens, shown once ---------- */
+const TOUR = [
+  { ic: 'spark', h: 'tour1H', p: 'tour1P', ex: 'tour1Ex' },
+  { ic: 'users', h: 'tour2H', p: 'tour2P', roles: true },
+  { ic: 'cal', h: 'tour3H', p: 'tour3P' },
+];
+function tourSeen() { try { return !!(state.profile.settings || {}).tourDone || localStorage.getItem('rafeeq2.tour.' + (state.user?.id || 'local')) === '1'; } catch { return !!(state.profile.settings || {}).tourDone; } }
+function maybeTour() {
+  if (!state.mode || UI.booting || $('#onbForm') || $('#sheet').classList.contains('on') || UI.layers.length || tourSeen()) return;
+  openTour(0);
+}
+function openTour(i) {
+  const st = TOUR[i]; if (!st) return;
+  try { localStorage.setItem('rafeeq2.tour.' + (state.user?.id || 'local'), '1'); } catch { }
+  const last = i === TOUR.length - 1;
+  openSheet(t('tourTitle'), `<div class="tour">
+      <div class="tour-ic">${ic[st.ic]}</div>
+      <h4>${t(st.h)}</h4><p>${t(st.p)}</p>
+      ${st.ex ? `<div class="tour-ex" dir="auto">${t(st.ex)}</div>` : ''}
+      ${st.roles ? `<ul class="tour-roles"><li><b>${t('role_exec')}</b> — ${t('tourRoleExec')}</li><li><b>${t('role_follow')}</b> — ${t('tourRoleFollow')}</li><li><b>${t('role_both')}</b> — ${t('tourRoleBoth')}</li></ul>` : ''}
+      <div class="tour-dots" aria-hidden="true">${TOUR.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+      <div class="save-row">${last
+        ? `<button type="button" class="btn primary block" data-act="tourdone" data-chat="1">${ic.spark}${t('tourStart')}</button>`
+        : `<button type="button" class="btn primary block" data-act="tournext" data-v="${i + 1}">${t('tourNext')}</button>`}
+        <button type="button" class="btn block" data-act="tourdone">${last ? t('close') : t('tourSkip')}</button></div>
+    </div>`);
 }
 
 /* ---------- notifications & weekend ---------- */
@@ -1850,6 +1879,10 @@ document.addEventListener('click', async e => {
       case 'sharevia': { try { await navigator.share({ title: document.title, url: el.dataset.url }); } catch { } return; }
       case 'shares': return openShares();
       case 'revokeshare': return confirmSheet(t('revokeQ'), t('revoke'), async () => { const { error } = await sb.from('shares').update({ revoked: true }).eq('id', el.dataset.sid); if (error) return toast(t('shareFail'), null, 'err'); const it = (UI.sharesList || []).find(x => x.id === el.dataset.sid); if (it) it.revoked = true; UI.layers.forEach(Lr => Lr.rerender()); toast(t('revokedSt')); });
+      case 'asksrc': { const st = Object.assign({}, state.profile.settings); st.askSource = !askSource(); saveProfile({ settings: st }); return renderMain(); }
+      case 'tour': return openTour(0);
+      case 'tournext': return openTour(+el.dataset.v);
+      case 'tourdone': { closeSheet(true); if (!(state.profile.settings || {}).tourDone) { const st = Object.assign({}, state.profile.settings, { tourDone: 1 }); saveProfile({ settings: st }, { quiet: true }); } if (el.dataset.chat) openChat(); return; }
       case 'aitoggle': { const st = Object.assign({}, state.profile.settings); st.ai = st.ai === false; saveProfile({ settings: st }); if (st.ai) { UI.aiBlocked = null; scheduleAI(500); } return renderMain(); }
       case 'filetask': {
         const fl = fileById(el.dataset.fid); if (!fl) return;
@@ -1888,7 +1921,7 @@ document.addEventListener('submit', e => {
     e.preventDefault();
     const n = $('#onbName').value.trim(); if (!n) return $('#onbName').focus();
     UI.onboarded = true; saveProfile({ display_name: n, job_title: $('#onbJob').value.trim(), lang: L() });
-    return renderAll();
+    renderAll(); return setTimeout(() => openTour(0), 350);
   }
   if (f.dataset.form === 'upd') {
     e.preventDefault(); const x = taskById(f.dataset.id); const v = (f.elements.u.value || '').trim(); if (!x || !v) return;
@@ -1935,7 +1968,7 @@ onChange(why => {
 
 /* ================= boot ================= */
 renderAll();
-boot().catch(err => console.error(err)).finally(() => { UI.booting = false; renderAll(); });
+boot().catch(err => console.error(err)).finally(() => { UI.booting = false; renderAll(); setTimeout(maybeTour, 2500); });
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   const bootAt = Date.now();
   let reloaded = false;

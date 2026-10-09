@@ -434,6 +434,20 @@ body.presenting{overflow:hidden}
   body.printing,body.printing.presenting{overflow:visible!important;height:auto!important}
 }
 
+/* first-use tour */
+.tour{text-align:center;padding:4px 2px 0}
+.tour-ic{width:56px;height:56px;border-radius:16px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;margin:0 auto 12px}
+.tour-ic svg{width:28px;height:28px}
+.tour h4{font-size:18px;margin:0 0 6px}
+.tour p{color:var(--ink-2);margin:0 auto 12px;max-width:440px}
+.tour-ex{background:var(--paper);border:1px dashed var(--line-2);border-radius:12px;padding:10px 12px;margin:0 auto 12px;max-width:440px;font-size:14.5px;text-align:start}
+.tour-roles{list-style:none;padding:0;margin:0 auto 12px;max-width:440px;text-align:start;display:grid;gap:6px}
+.tour-roles li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:14px;color:var(--ink-2)}
+.tour-roles b{color:var(--ink)}
+.tour-dots{display:flex;gap:6px;justify-content:center;margin:4px 0 12px}
+.tour-dots i{width:7px;height:7px;border-radius:99px;background:var(--line-2)}
+.tour-dots i.on{width:20px;background:var(--accent)}
+
 /* assistant chat */
 .sheet.chat{height:92vh;height:92dvh;max-width:620px}
 .sheet.chat .sheet-b{display:flex;flex-direction:column;padding:0;overflow:hidden;flex:1;min-height:0}
