@@ -206,7 +206,7 @@ export async function invokeRefine(payload) {
   return data.result;
 }
 
-/** Chat understanding (Gemini). Times out so a stalled request never blocks the chat. */
+/** Chat understanding (Claude, Gemini as a fallback — server-side). Times out so a stalled request never blocks the chat. */
 /* ---------- push notifications ---------- */
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const b64ToBytes = s => { const t = s.replace(/-/g, '+').replace(/_/g, '/'); const b = atob(t + '==='.slice((t.length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
