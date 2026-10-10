@@ -75,7 +75,25 @@ const WAIT_VERB = /(مستني|منتظر|بانتظار|في انتظار|waiti
 
 const WB = (w) => new RegExp('(^|[^\\p{L}])(?:' + w + ')([^\\p{L}]|$)', 'u');
 const RE_TODAY = WB('النهارده|اليوم|today'), RE_TOMORROW = WB('بكر[هةا]|غدا|tomorrow'), RE_AFTER_TOMORROW = /بعد\s*بكر[هةا]|بعد\s*غد|day after tomorrow/;
+const MONTHS = [['يناير', 'jan'], ['فبراير', 'feb'], ['مارس', 'mar'], ['ابريل', 'apr'], ['مايو', 'may'], ['يونيو', 'يونيه', 'jun'], ['يوليو', 'يوليه', 'jul'], ['اغسطس', 'aug'], ['سبتمبر', 'sep'], ['اكتوبر', 'oct'], ['نوفمبر', 'nov'], ['ديسمبر', 'dec']];
+const MONTH_RE = new RegExp('(?:^|[^\\d])(\\d{1,2})\\s*(?:من\\s+)?(?:شهر\\s+)?(' + MONTHS.flat().join('|') + ')[a-z]*(?:\\s+(\\d{4}))?(?![\\p{L}])', 'u');
+/** The next date (today or later) whose day of month is `dom`, optionally in a given month. */
+function dayOfMonth(td, dom, mon = null, year = null) {
+  let y = year || +td.slice(0, 4), m = mon != null ? mon : +td.slice(5, 7) - 1;
+  for (let k = 0; k < 13; k++) {
+    const v = validDate(`${y}-${pad(m + 1)}-${pad(dom)}`);
+    if (v && (v >= td || year)) return v;
+    if (mon != null && !year) { y++; continue; } // «5 يناير» said in October → next January
+    m++; if (m > 11) { m = 0; y++; }
+  }
+  return null;
+}
 function dueFrom(n, td) {
+  // explicit dates first: «29 أكتوبر», «الأحد 18», «يوم 15» — a weekday name next to a number is just a label
+  let mm = n.match(MONTH_RE);
+  if (mm) { const mon = MONTHS.findIndex(a => a.includes(mm[2])); const v = dayOfMonth(td, +mm[1], mon, mm[3] ? +mm[3] : null); if (v) return v; }
+  mm = n.match(/(?:^|[^\p{L}])(?:يوم\s+)?(?:ال)?(?:احد|اثنين|اتنين|ثلاثاء|تلات|اربعاء|اربع|خميس|جمعه|سبت)\s+(\d{1,2})(?![\d\/\-:])/u) || n.match(/(?:^|[^\p{L}])(?:يوم|بتاريخ)\s+(\d{1,2})(?![\d\/\-:]|\s*(?:يوم|ايام|ساع|دقيق))/u);
+  if (mm && +mm[1] >= 1 && +mm[1] <= 31) { const v = dayOfMonth(td, +mm[1]); if (v) return v; }
   if (RE_AFTER_TOMORROW.test(n)) return addDays(td, 2);
   if (RE_TODAY.test(n)) return td;
   if (RE_TOMORROW.test(n)) return addDays(td, 1);
@@ -83,7 +101,7 @@ function dueFrom(n, td) {
   if (/بعد\s+يومين/.test(n)) return addDays(td, 2);
   if (/بعد\s+(اسبوعين)/.test(n)) return addDays(td, 14);
   if (/بعد\s+(اسبوع)|in a week/.test(n) && !/الاسبوع\s+(الجاي|القادم)/.test(n)) return addDays(td, 7);
-  if (/(اخر|نهايه)\s+(?:يوم\s+)?(?:في\s+|من\s+)?الشهر|end of (the )?month/.test(n)) return lastOfMonth(td);
+  if (/(اخر|نهايه)\s+(?:يوم\s+)?(?:في\s+|من\s+)?الشهر|end of (the )?month/.test(n)) { const d = pd(td), lw = lastWorkdayOf(d.getFullYear(), d.getMonth()); return lw >= td ? lw : lastOfMonth(td); } // the last WORKDAY
   if (/(اخر|نهايه)\s+الاسبوع|end of (the )?week/.test(n)) return pd(td).getDay() === weekEndDay() ? td : nextWeekday(td, weekEndDay());
   const nextWeek = /الاسبوع\s+(الجاي|القادم|اللي\s+جاي)|next week/.test(n);
   let wd = -1;
@@ -104,7 +122,9 @@ const VERBS = [
   [/^(أحدث|احدث|أحدّث)\s+/, 'تحديث '], [/^(أكتب|اكتب)\s+/, 'كتابة '], [/^(أحضر|احضر)\s+(اجتماع|الاجتماع)/, 'حضور $2'], [/^(أطبع|اطبع)\s+/, 'طباعة '],
 ];
 const DATE_WORDS = '(?:النهارده|النهاردة|اليوم|بكرة|بكره|بكرا|غدًا|غدا|بعد بكرة|بعد بكره|بعد غد|الأحد|الاحد|الاثنين|الإثنين|الاتنين|الثلاثاء|التلات|الأربعاء|الاربعاء|الخميس|الجمعة|السبت|الأسبوع الجاي|الاسبوع الجاي|الأسبوع القادم|آخر الشهر|اخر الشهر|آخر الأسبوع|اخر الاسبوع|بعد أسبوع|بعد اسبوع|بعد يومين|today|tomorrow|next week)';
+const MONTH_WORDS = '(?:\\d{1,2}\\s*(?:من\\s+)?(?:يناير|فبراير|مارس|أبريل|ابريل|مايو|يونيو|يونيه|يوليو|يوليه|أغسطس|اغسطس|سبتمبر|أكتوبر|اكتوبر|نوفمبر|ديسمبر)(?:\\s+\\d{4})?)';
 const DATE_RE = new RegExp('(^|[^\\p{L}])(?:(?:قبل|يوم|في|بحلول|by|on)\\s+)?' + DATE_WORDS + '(?=\\s|$|[،,.])', 'gu');
+const DATE_RE2 = new RegExp('(^|[^\\p{L}])(?:(?:قبل|يوم|في|بحلول)\\s+)?' + MONTH_WORDS + '(?=\\s|$|[،,.])', 'gu');
 const PRIO_RE = /\s*(?:(?:مش|غير|مو)\s+)?(عاجل(?:ة)?(?:\s+جد(?:ًا|ا|اً))?|ضروري(?:ة)?(?:\s+جد(?:ًا|ا|اً))?|مستعجل(?:ة)?|مهم(?:ة)?\s+جد(?:ًا|ا|اً)|urgent|asap|not urgent|low priority)(?=\s|$|[،,.])/g;
 const FU_SPLIT = /\s+و\s*(?=أتابع|اتابع|أكلم|اكلم|أسأل|اسأل|اسال|أتصل|اتصل|أذكّر|اذكر|أبلغ|ابلغ)/;
 const WHY_RE = /(?:عشان|علشان|بخصوص|لأجل|لاجل|حول|عن موضوع|عن|about|regarding)\s+(.+)$/;
@@ -226,7 +246,7 @@ export function parseCapture(text, people, td = today()) {
   let s = base.replace(FILLER, '').replace(/\s*(?:و\s*)?(?:مستني|منتظر|بانتظار|في انتظار)\s+.*$/, '');
   const primaryFu = /^(أتابع|اتابع|أكلم|اكلم|أسأل|اسأل|اسال|أتصل|اتصل|أذكّر|اذكر|أبلغ|ابلغ)/.test(s);
   if (!primaryFu) s = s.split(FU_SPLIT)[0];
-  s = s.replace(DATE_RE, '$1 ').replace(PRIO_RE, ' ').replace(/\s+/g, ' ').trim();
+  s = s.replace(DATE_RE2, '$1 ').replace(DATE_RE, '$1 ').replace(PRIO_RE, ' ').replace(/\s+/g, ' ').trim();
   for (const [re, rep] of VERBS) { if (re.test(s)) { s = s.replace(re, rep); break; } }
   s = clean(s.replace(/\s+و$/, ''));
   if (!s) s = raw;

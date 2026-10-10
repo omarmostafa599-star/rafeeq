@@ -846,7 +846,7 @@ function closeSheet(force) {
 $('#backdrop').addEventListener('click', () => closeSheet());
 function confirmSheet(msg, okLabel, onOk, danger = true) {
   const sh = $('#confirm');
-  sh.innerHTML = `<div class="confirm-in"><p>${msg}</p><div class="row"><button type="button" class="btn block" id="cNo">${t('cancel')}</button><button type="button" class="btn block ${danger ? 'danger-btn' : 'primary'}" id="cOk">${okLabel}</button></div></div>`;
+  sh.innerHTML = `<div class="confirm-in"><p>${msg}</p><div class="row"><button type="button" class="btn block" id="cNo">${/^(إلغاء|cancel)/i.test(okLabel) ? t('back') : t('cancel')}</button><button type="button" class="btn block ${danger ? 'danger-btn' : 'primary'}" id="cOk">${okLabel}</button></div></div>`;
   sh.hidden = false;
   sh.querySelector('#cNo').onclick = () => { sh.hidden = true; };
   sh.querySelector('#cOk').onclick = () => { sh.hidden = true; onOk(); };
@@ -920,22 +920,30 @@ function fromLocal(p, raw) {
   if (p.source) d.source = p.source.self ? SELF : (personById(matchPerson(p.source.name))?.name || p.source.name);
   return d;
 }
-const SELF_RE = /(من نفسي|مبادره|بنفسي|ذاتي|my own|myself|self|كلف|كلفت|خلي |خليت|قول ل|قولي ل|ابلغ|بلغ |اطلب من|اطلبي من|assign|delegate|tell )/;
+/** An assigner's name as stored: a known person wins, even behind a role word («المدير عدنان الصلاح» → «عدنان الصلاح»). */
+function srcName(s) {
+  const raw = String(s || '').replace(/\s+/g, ' ').trim().slice(0, 80); if (!raw) return null;
+  const hit = personById(matchPerson(raw)); if (hit) return hit.name;
+  const bare = raw.replace(/^(?:(?:ال)?(?:مدير|مديرة|مديري|مديرتي|رئيس|رئيسي|مشرف|مشرفي|مهندس|دكتور|أستاذ|استاذ)|م\.|د\.|أ\.)\s+/, '').trim();
+  const hit2 = bare !== raw && bare.split(' ').length >= 2 ? personById(matchPerson(bare)) : null;
+  return hit2 ? hit2.name : raw;
+}
+const SELF_RE = /(من نفسي|مبادره|بنفسي|ذاتي|من تنظيمي|تنظيمي|من عندي|my own|myself|self|كلف|كلفت|خلي |خليت|قول ل|قولي ل|ابلغ|بلغ |اطلب من|اطلبي من|assign|delegate|tell )/;
 function fromAI(a, local, raw = '') {
   const d = { id: uuid(), raw: local?.raw || '', title: String(a.title || local?.title || '').replace(/\s+/g, ' ').trim().slice(0, 300), due: validDate(a.due) || local?.due || null, weekendOk: false,
     priority: ['hi', 'mid', 'lo'].includes(a.priority) ? a.priority : local?.priority || 'mid', role: ['exec', 'follow', 'both'].includes(a.role) ? a.role : 'exec',
-    noDue: !!a.no_due && /(بدون|من غير|دون|مفيش|ملوش|مالوش|no deadline|no due|whenever)/.test(normAr(raw || local?.raw || '')),
-    source: (() => { const me = a.source && /^(انا|نفسي|me|myself|self)$/.test(normAr(a.source).trim()); if (a.source && !me) return personById(matchPerson(a.source))?.name || String(a.source).slice(0, 80); return me || (a.source_self && SELF_RE.test(normAr(raw || local?.raw || ''))) ? SELF : local?.source || null; })(), // a named assigner wins; «أنا» = self
+    noDue: !!a.no_due && /(بدون|من غير|دون|مفيش|ملوش|مالوش|ماله|ما له|مالها|ما لها|بلا موعد|مش محدد|مو محدد|مب محدد|غير محدد|no deadline|no due|whenever)/.test(normAr(raw || local?.raw || '')),
+    source: (() => { const me = a.source && /^(انا|نفسي|me|myself|self)$/.test(normAr(a.source).trim()); if (a.source && !me) return srcName(a.source); return me || (a.source_self && SELF_RE.test(normAr(raw || local?.raw || ''))) ? SELF : local?.source || null; })(), // a named assigner wins; «أنا» = self
     project: String(a.project || '').slice(0, 80), waitWhat: a.waiting_what || null, people: [],
     time: /^\d{2}:\d{2}$/.test(a.due_time || '') ? a.due_time : local?.time || null, recur: cleanRecur(a.recur) || local?.recur || null };
-  if (d.recur && !d.due) d.due = recurNext(d.recur, addDays(T(), -1));
+  if (d.recur && (!d.due || d.recur.dom === 'last' || isWeekend(d.due))) d.due = recurNext(d.recur, addDays(T(), -1)); // «آخر كل شهر» = last workday
   (a.people || []).slice(0, 8).forEach(p => {
     if (!p || !p.name) return;
     const ref = refOf(p.name, p.desc, !!p.generic); if (!ref) return;
     if (d.people.some(q => refName(q.ref) === refName(ref))) return;
     d.people.push({ ref, role: ['followup', 'waiting', 'related'].includes(p.role) ? p.role : 'related', what: String(p.what || '').slice(0, 200), due: validDate(p.due) || null });
   });
-  if (!d.people.length && local?.people?.length) d.people = local.people;
+  if (!Array.isArray(a.people) && local?.people?.length) d.people = local.people.filter(p => !(d.source && normAr(refName(p.ref)).includes(normAr(d.source).replace(/^(م|د|ا)\.\s*/, '').split(' ')[0])));
   if (d.people.some(p => p.role !== 'related') && d.role === 'exec') d.role = 'both';
   return d;
 }
@@ -1040,7 +1048,7 @@ function questionHTML({ n, d, m }) {
   let q = '', opts = '';
   if (m.k === 'match') { const mt = taskById(d.match); q = t('askMatch', { l: ttl, t: `«${esc((mt?.title || '').slice(0, 70))}»` }); opts = `<button type="button" class="chip" data-act="ansmatch" data-v="yes">${sic('check', 14)}${t('matchYes')}</button><button type="button" class="chip" data-act="ansmatch" data-v="no">${t('matchNo')}</button>`; }
   else if (m.k === 'due') { q = t('askDueQ', { t: ttl }); opts = dateChips().map(([l, v]) => `<button type="button" class="chip" data-act="ansdue" data-v="${v}">${l}</button>`).join('') + `<label class="chip datein">${sic('cal', 15)}<input type="date" id="ansDate" aria-label="${esc(t('pickDate'))}"></label><button type="button" class="chip" data-act="ansdue" data-v="">${t('noDue')}</button>`; }
-  else if (m.k === 'weekend') { const nx = addWorkdays(d.due, 1); q = t('askWeekend', { d: `${wd(d.due)} ${fmtShort(d.due)}` }); opts = `<button type="button" class="chip" data-act="answk" data-v="${nx}">${t('moveTo', { d: `${wd(nx)} ${fmtShort(nx)}` })}</button><button type="button" class="chip" data-act="answk" data-v="keep">${t('keepIt')}</button>`; }
+  else if (m.k === 'weekend') { const nx = addWorkdays(d.due, 1), pv = addWorkdays(d.due, -1); q = t('askWeekend', { d: `${wd(d.due)} ${fmtShort(d.due)}` }); opts = (pv >= T() ? `<button type="button" class="chip" data-act="answk" data-v="${pv}">${t('moveTo', { d: `${wd(pv)} ${fmtShort(pv)}` })}</button>` : '') + `<button type="button" class="chip" data-act="answk" data-v="${nx}">${t('moveTo', { d: `${wd(nx)} ${fmtShort(nx)}` })}</button><button type="button" class="chip" data-act="answk" data-v="keep">${t('keepIt')}</button>`; }
   else if (m.k === 'source') { q = t('askSource', { t: ttl }); const srcs = [...new Set([...recentSources(), ...topPeople(4).map(p => p.name)])].slice(0, 6); opts = `<button type="button" class="chip on" data-act="anssrc" data-v="${SELF}">${t('srcSelf')}</button>` + srcs.map(s => `<button type="button" class="chip" data-act="anssrc" data-v="${esc(s)}" dir="auto">${esc(s)}</button>`).join(''); }
   else if (m.k === 'who') { q = t('askWho', { t: ttl }); opts = topPeople(8).map(p => `<button type="button" class="chip ${CH.pick.has(p.id) ? 'on' : ''}" data-act="answho" data-v="${p.id}" dir="auto">${esc(p.name)}</button>`).join('') + `<button type="button" class="chip primary-chip" data-act="answhodone" ${CH.pick.size ? '' : 'disabled'}>${sic('check', 14)}${t('done')}</button>`; }
   else if (m.k === 'generic' || m.k === 'amb') { const p = d.people[m.i]; q = m.k === 'generic' ? t('askGeneric', { r: esc(p.ref.label) }) : t('whoExactly', { n: esc(p.ref.label) }); const ids = m.k === 'amb' ? p.ref.ids : topPeople(8).map(x => x.id); opts = ids.map(id => `<button type="button" class="chip" data-act="ansref" data-i="${m.i}" data-v="${id}" dir="auto">${esc(pname(id))}</button>`).join('') + (m.k === 'generic' ? `<button type="button" class="chip" data-act="ansref" data-i="${m.i}" data-v="keep">${t('keepAs', { r: esc(p.ref.label) })}</button>` : ''); }
@@ -1099,7 +1107,7 @@ function applyEdit(d, e) {
   if (e.clear_time) d.time = null; else if (/^\d{2}:\d{2}$/.test(e.due_time || '')) d.time = e.due_time;
   if (['hi', 'mid', 'lo'].includes(e.priority)) d.priority = e.priority;
   if (['exec', 'follow', 'both'].includes(e.role)) d.role = e.role;
-  if (e.source_self) d.source = SELF; else if (e.source) d.source = personById(matchPerson(e.source))?.name || String(e.source).slice(0, 80);
+  if (e.source_self) d.source = SELF; else if (e.source) d.source = srcName(e.source);
   if (e.project != null) d.project = String(e.project || '').slice(0, 80);
   if (e.clear_recur) d.recur = null;
   else if (e.recur) { d.recur = cleanRecur(e.recur); if (d.recur && !validDate(e.due)) { d.due = recurNext(d.recur, addDays(T(), -1)); d.noDue = false; } }
@@ -1173,8 +1181,10 @@ async function chatSend(text, label) {
   renderChat();
 }
 /** Free-text answer to the current question. Returns false when the text is not an answer. */
+const EDIT_CUE = /(^|\s)(خلي|خليها|خليه|غير|غيّر|عدل|عدّل|شيل|ضيف|الاولي|الأولى|التانيه|الثانيه|التالته|الثالثه|الاخيره|كمان|بدل|ومصدرها|والمصدر|change|make it|instead)(\s|$)/;
 function answerText({ d, m }, text) {
   const n = normAr(text);
+  if (m.k !== 'who' && (text.trim().split(/\s+/).length > 5 || EDIT_CUE.test(n))) return false; // an edit, not an answer: let the assistant read it
   if (m.k === 'match') {
     if (/^(نعم|ايوه|ايوا|اه|ايه|صح|هي|هيا|بالظبط|yes|yeah|y)\b/.test(n.trim())) { d.closeTask = d.match; return true; }
     if (/^(لا|لاء|لأ|no|منفصل|مختلف)/.test(n.trim())) { d.closeTask = null; return true; }
@@ -1188,7 +1198,7 @@ function answerText({ d, m }, text) {
   if (m.k === 'source') {
     if (/^(انا|أنا|نفسي|ذاتي|me|myself|self)$/.test(n.trim()) || /(من نفسي|مبادره)/.test(n)) { d.source = SELF; return true; }
     if (text.split(/\s+/).length > 4) return false;
-    d.source = personById(matchPerson(text))?.name || text.replace(/\s+/g, ' ').trim().slice(0, 80); return true;
+    d.source = srcName(text); return true;
   }
   if (m.k === 'who') {
     if (text.split(/\s+/).length > 8) return false;
@@ -1285,9 +1295,9 @@ function queryHTML(q) {
     }
     case 'person': { const pid = q.person; const ts = sortTasks(open.filter(x => x.waiting_on === pid)); const fs = fus.filter(([, f]) => f.person_id === pid); return list(t('qaPerson', { p: esc(pname(pid)), n: plural(ts.length + fs.length, 'items') }), [...ts.map(qRow), ...fs.map(([x, f]) => qFu(x, f))], t('qaNone')) + `<button type="button" class="linkbtn" data-person="${pid}">${t('openPerson')}</button>`; }
     case 'project': { const key = normAr(q.project); const ts = sortTasks(live().filter(x => normAr(x.project || '').includes(key) && isOpen(x))); return list(t('qaProject', { p: esc(q.project), n: plural(ts.length, 'tasks') }), ts.map(qRow), t('qaNone')); }
-    case 'done': { const ts = live().filter(x => x.status === 'done' && x.completed_on >= q.from && x.completed_on <= q.to).sort((a, b) => a.completed_on < b.completed_on ? 1 : -1); const nl = ts.filter(isLog).length; return list(t('qaDone', { n: plural(ts.length - nl, 'doneN'), m: plural(nl, 'logs'), r: rangeLabel(q.from, q.to) }), ts.map(qRow), t('qaNoneDone')) + `<button type="button" class="linkbtn" data-act="chatfill">${sic('plus', 14)} ${t('qLog')}</button>`; }
+    case 'done': { const ts = live().filter(x => x.status === 'done' && x.completed_on >= q.from && x.completed_on <= q.to).sort((a, b) => a.completed_on < b.completed_on ? 1 : -1); const nl = ts.filter(isLog).length; return list(t('qaDone1', { r: rangeLabel(q.from, q.to), n: [ts.length - nl ? plural(ts.length - nl, 'doneN') : '', nl ? plural(nl, 'logs') : ''].filter(Boolean).join(' · ') || plural(0, 'doneN') }), ts.map(qRow), t('qaNoneDone')) + `<button type="button" class="linkbtn" data-act="chatfill">${sic('plus', 14)} ${t('qLog')}</button>`; }
     case 'due': { const ts = sortTasks(open.filter(x => x.due && x.due >= q.from && x.due <= q.to)); const fs = fus.filter(([, f]) => f.due >= q.from && f.due <= q.to); const late = q.from <= T() && q.to >= T() ? sortTasks(open.filter(isLate)) : [];
-      return list(t('qaDue', { r: rangeLabel(q.from, q.to), n: plural(ts.length, 'tasks'), m: plural(fs.length, 'fus') }), [...ts.map(qRow), ...fs.map(([x, f]) => qFu(x, f))], t('qaFree')) + (late.length ? `<div class="qhead sm">${t('plusLate', { n: late.length })}</div><div class="qlist">${late.map(qRow).join('')}</div>` : ''); }
+      return list(fs.length ? t('qaDue', { r: rangeLabel(q.from, q.to), n: plural(ts.length, 'tasks'), m: plural(fs.length, 'fus') }) : t('qaDue1', { r: rangeLabel(q.from, q.to), n: plural(ts.length, 'tasks') }), [...ts.map(qRow), ...fs.map(([x, f]) => qFu(x, f))], t('qaFree')) + (late.length ? `<div class="qhead sm">${t('plusLate', { n: late.length })}</div><div class="qlist">${late.map(qRow).join('')}</div>` : ''); }
     default: return briefHTML(true);
   }
 }
@@ -1542,6 +1552,7 @@ function openFuAdd(x0, f0) {
           ids.forEach(pid => { x.followups.push({ id: uuid(), person_id: pid, what: (fd.get('w') || '').trim(), due: validDate(fd.get('d')) || nextWorkday(), time: /^\d{2}:\d{2}$/.test(fd.get('tm') || '') ? fd.get('tm') : null, status: 'open', created_at: nowISO(), closed_on: null, log: [] }); addLog(x, 'fu_added', '', { person_id: pid }); });
         }
         else { const pid = getOrCreatePerson(fd.get('p')); if (!pid) return; const d0 = validDate(fd.get('d')); if (d0 && d0 < T() && f.status === 'open') { toast(t('pastDate')); return; } f.person_id = pid; f.what = (fd.get('w') || '').trim(); f.due = validDate(fd.get('d')) || f.due; f.time = /^\d{2}:\d{2}$/.test(fd.get('tm') || '') ? fd.get('tm') : null; }
+        if (isNew && x.role === 'exec') x.role = 'both';
         putTask(x); closeSheet(true); toast(t('saved'));
       };
     }
