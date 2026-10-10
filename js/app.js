@@ -929,11 +929,23 @@ function srcName(s) {
   return hit2 ? hit2.name : raw;
 }
 const SELF_RE = /(من نفسي|مبادره|بنفسي|ذاتي|من تنظيمي|تنظيمي|من عندي|my own|myself|self|كلف|كلفت|خلي |خليت|قول ل|قولي ل|ابلغ|بلغ |اطلب من|اطلبي من|assign|delegate|tell )/;
-function fromAI(a, local, raw = '') {
+/** In a list, the line a task came from (best word overlap with its title); the whole text for a single task. */
+function lineOf(raw, title, many) {
+  if (!many) return raw;
+  const toks = s => new Set(nameTokens(s).filter(w => w.length > 2));
+  const segs = String(raw || '').split(/\n+|(?:^|\s)\d{1,2}\s*[-.)]\s+|؛/).filter(x => x.trim()).map(seg => [seg, toks(seg)]);
+  const hit = (st, w) => st.has(w) || [...st].some(v => v.length > 3 && w.length > 3 && (v.includes(w) || w.includes(v)));
+  const tt = [...toks(title)], df = w => segs.filter(([, st]) => hit(st, w)).length || 1; // rare words weigh more («مراجعة» is everywhere)
+  let best = '', score = 0;
+  segs.forEach(([seg, st]) => { const n = tt.reduce((a, w) => a + (hit(st, w) ? 1 / df(w) : 0), 0); if (n > score) { score = n; best = seg; } });
+  return score ? best : '';
+}
+function fromAI(a, local, raw = '', many = false) {
+  raw = lineOf(raw, a.title || '', many);
   const d = { id: uuid(), raw: local?.raw || '', title: String(a.title || local?.title || '').replace(/\s+/g, ' ').trim().slice(0, 300), due: validDate(a.due) || local?.due || null, weekendOk: false,
     priority: ['hi', 'mid', 'lo'].includes(a.priority) ? a.priority : local?.priority || 'mid', role: ['exec', 'follow', 'both'].includes(a.role) ? a.role : 'exec',
     noDue: !!a.no_due && /(بدون|من غير|دون|مفيش|ملوش|مالوش|ماله|ما له|مالها|ما لها|بلا موعد|مش محدد|مو محدد|مب محدد|غير محدد|no deadline|no due|whenever)/.test(normAr(raw || local?.raw || '')),
-    source: (() => { const me = a.source && /^(انا|نفسي|me|myself|self)$/.test(normAr(a.source).trim()); if (a.source && !me) return srcName(a.source); return me || (a.source_self && SELF_RE.test(normAr(raw || local?.raw || ''))) ? SELF : local?.source || null; })(), // a named assigner wins; «أنا» = self
+    source: (() => { const me = a.source && /^(انا|نفسي|me|myself|self)$/.test(normAr(a.source).trim()); if (a.source && !me) return srcName(a.source); const rw = normAr(raw || local?.raw || ''); return me || (a.source_self && SELF_RE.test(rw)) ? SELF : local?.source || null; })(), // a named assigner wins; «أنا» = self
     project: String(a.project || '').slice(0, 80), waitWhat: a.waiting_what || null, people: [],
     time: /^\d{2}:\d{2}$/.test(a.due_time || '') ? a.due_time : local?.time || null, recur: cleanRecur(a.recur) || local?.recur || null };
   if (d.recur && (!d.due || d.recur.dom === 'last' || isWeekend(d.due))) d.due = recurNext(d.recur, addDays(T(), -1)); // «آخر كل شهر» = last workday
@@ -1049,7 +1061,7 @@ function questionHTML({ n, d, m }) {
   if (m.k === 'match') { const mt = taskById(d.match); q = t('askMatch', { l: ttl, t: `«${esc((mt?.title || '').slice(0, 70))}»` }); opts = `<button type="button" class="chip" data-act="ansmatch" data-v="yes">${sic('check', 14)}${t('matchYes')}</button><button type="button" class="chip" data-act="ansmatch" data-v="no">${t('matchNo')}</button>`; }
   else if (m.k === 'due') { q = t('askDueQ', { t: ttl }); opts = dateChips().map(([l, v]) => `<button type="button" class="chip" data-act="ansdue" data-v="${v}">${l}</button>`).join('') + `<label class="chip datein">${sic('cal', 15)}<input type="date" id="ansDate" aria-label="${esc(t('pickDate'))}"></label><button type="button" class="chip" data-act="ansdue" data-v="">${t('noDue')}</button>`; }
   else if (m.k === 'weekend') { const nx = addWorkdays(d.due, 1), pv = addWorkdays(d.due, -1); q = t('askWeekend', { d: `${wd(d.due)} ${fmtShort(d.due)}` }); opts = (pv >= T() ? `<button type="button" class="chip" data-act="answk" data-v="${pv}">${t('moveTo', { d: `${wd(pv)} ${fmtShort(pv)}` })}</button>` : '') + `<button type="button" class="chip" data-act="answk" data-v="${nx}">${t('moveTo', { d: `${wd(nx)} ${fmtShort(nx)}` })}</button><button type="button" class="chip" data-act="answk" data-v="keep">${t('keepIt')}</button>`; }
-  else if (m.k === 'source') { q = t('askSource', { t: ttl }); const srcs = [...new Set([...recentSources(), ...topPeople(4).map(p => p.name)])].slice(0, 6); opts = `<button type="button" class="chip on" data-act="anssrc" data-v="${SELF}">${t('srcSelf')}</button>` + srcs.map(s => `<button type="button" class="chip" data-act="anssrc" data-v="${esc(s)}" dir="auto">${esc(s)}</button>`).join(''); }
+  else if (m.k === 'source') { q = t('askSource', { t: ttl }); const srcs = [...new Set([...recentSources(), ...topPeople(4).map(p => p.name)])].slice(0, 6); const left = CH.drafts.filter(x => !isLogD(x) && !x.source).length; const all = left > 1 ? [...new Set([CH.lastSrc, SELF].filter(Boolean))].map(v => `<button type="button" class="chip primary-chip" data-act="anssrc" data-all="1" data-v="${esc(v)}" dir="auto">${esc(t('srcForAll', { s: srcLabel(v), n: left }))}</button>`).join('') : ''; opts = all + `<button type="button" class="chip on" data-act="anssrc" data-v="${SELF}">${t('srcSelf')}</button>` + srcs.map(s => `<button type="button" class="chip" data-act="anssrc" data-v="${esc(s)}" dir="auto">${esc(s)}</button>`).join(''); }
   else if (m.k === 'who') { q = t('askWho', { t: ttl }); opts = topPeople(8).map(p => `<button type="button" class="chip ${CH.pick.has(p.id) ? 'on' : ''}" data-act="answho" data-v="${p.id}" dir="auto">${esc(p.name)}</button>`).join('') + `<button type="button" class="chip primary-chip" data-act="answhodone" ${CH.pick.size ? '' : 'disabled'}>${sic('check', 14)}${t('done')}</button>`; }
   else if (m.k === 'generic' || m.k === 'amb') { const p = d.people[m.i]; q = m.k === 'generic' ? t('askGeneric', { r: esc(p.ref.label) }) : t('whoExactly', { n: esc(p.ref.label) }); const ids = m.k === 'amb' ? p.ref.ids : topPeople(8).map(x => x.id); opts = ids.map(id => `<button type="button" class="chip" data-act="ansref" data-i="${m.i}" data-v="${id}" dir="auto">${esc(pname(id))}</button>`).join('') + (m.k === 'generic' ? `<button type="button" class="chip" data-act="ansref" data-i="${m.i}" data-v="keep">${t('keepAs', { r: esc(p.ref.label) })}</button>` : ''); }
   return `<div class="ask q"><p>${lead}${q}</p><div class="opts">${opts}</div>${m.k === 'match' ? '' : `<small class="note">${t(m.k === 'who' ? 'orTypeNames' : m.k === 'source' ? 'orTypeName' : m.k === 'due' ? 'orTypeDate' : 'orType')}</small>`}</div>`;
@@ -1151,17 +1163,18 @@ async function chatSend(text, label) {
   CH.thinking = true; CH.since = Date.now(); renderChat();
   const dropProv = () => { if (prov.length) { CH.drafts = CH.drafts.filter(d => !prov.includes(d)); prov = []; } };
   try {
-    const r = await invokeAssist({ v: 2, text, history: CH.hist.slice(0, -1), drafts: prov.length ? [] : draftBrief(), pending: pend ? pend.m.k : null, today: T(), weekday: new Intl.DateTimeFormat('en', { weekday: 'long' }).format(pd(T())), lang: L(), weekend: weekendDays(), people: people().map(p => p.name), sources: recentSources() });
+    const r = await invokeAssist({ v: 2, text: text.slice(0, 4000), history: CH.hist.slice(0, -1), drafts: prov.length ? [] : draftBrief(), pending: pend ? pend.m.k : null, today: T(), weekday: new Intl.DateTimeFormat('en', { weekday: 'long' }).format(pd(T())), lang: L(), weekend: weekendDays(), people: people().map(p => p.name), sources: recentSources() }, text.length > 450 ? 34000 : 22000);
     dropProv();
     // 1) changes to the drafts already on screen
     const n0 = CH.drafts.length;
-    (r.edits || []).forEach(e => applyEdit(CH.drafts[(e.n | 0) - 1], e));
+    const asNew = (r.edits || []).filter(e => (e.n | 0) > n0 && e.title); // a model slip: new items returned as edits of drafts that do not exist
+    (r.edits || []).forEach(e => { if ((e.n | 0) <= n0) applyEdit(CH.drafts[(e.n | 0) - 1], e); });
     [...new Set((r.remove || []).map(n => (n | 0) - 1))].filter(i => i >= 0 && i < n0).sort((a, b) => b - a).forEach(i => CH.drafts.splice(i, 1));
     // 2) new items
-    const tk = (r.tasks || []).filter(a => a && a.title).slice(0, 10), lg = (r.logs || []).filter(a => a && a.title).slice(0, Math.max(0, 10 - tk.length));
+    const tk = [...(r.tasks || []), ...asNew.map(e => ({ ...e, people: e.add_people || [] }))].filter(a => a && a.title).slice(0, 20), lg = (r.logs || []).filter(a => a && a.title).slice(0, Math.max(0, 20 - tk.length));
     if (tk.length || lg.length) {
-      const tl = tk.length ? localDrafts(text).filter(d => !isLogD(d)) : [];
-      CH.drafts.push(...lg.map(a => fromLog(a.title, a.date, text, a.project)), ...tk.map((a, i) => fromAI(a, tl.length === tk.length ? tl[i] : { source: tl.length === 1 ? tl[0].source : null }, text)));
+      const tl = tk.length === 1 ? localDrafts(text).filter(d => !isLogD(d)) : [];
+      CH.drafts.push(...lg.map(a => fromLog(a.title, a.date, text, a.project)), ...tk.map(a => fromAI(a, tk.length === 1 && tl.length === 1 ? tl[0] : null, text, tk.length > 1)));
     }
     // 3) what to say / do
     const fresh = tk.length || lg.length; // items created by this very message have not been reviewed yet
@@ -1196,9 +1209,9 @@ function answerText({ d, m }, text) {
     return text.split(/\s+/).length <= 4 ? (CH.msgs.push({ who: 'bot', html: t('dateNotUnderstood') }), true) : false;
   }
   if (m.k === 'source') {
-    if (/^(انا|أنا|نفسي|ذاتي|me|myself|self)$/.test(n.trim()) || /(من نفسي|مبادره)/.test(n)) { d.source = SELF; return true; }
+    if (/^(انا|أنا|نفسي|ذاتي|me|myself|self)$/.test(n.trim()) || /(من نفسي|مبادره)/.test(n)) { d.source = SELF; CH.lastSrc = SELF; return true; }
     if (text.split(/\s+/).length > 4) return false;
-    d.source = srcName(text); return true;
+    d.source = srcName(text); CH.lastSrc = d.source; return true;
   }
   if (m.k === 'who') {
     if (text.split(/\s+/).length > 8) return false;
@@ -1237,7 +1250,7 @@ function saveDrafts() {
     }
     putTask(x); made.push(x);
   }
-  CH.drafts = []; CH.pick = new Set();
+  CH.drafts = []; CH.pick = new Set(); CH.lastSrc = null;
   const nDone = made.filter(x => x.status === 'done').length;
   const head = !nDone ? (made.length > 1 ? t('savedN', { n: plural(made.length, 'tasks') }) : t('savedTask')) : nDone === made.length ? (made.length > 1 ? t('savedLogs', { n: plural(made.length, 'logs') }) : t('savedLog')) : t('savedMixed', { n: plural(made.length, 'items') });
   hist('model', head + ' ' + made.map(x => x.title).join(' / '));
@@ -2025,7 +2038,7 @@ document.addEventListener('click', async e => {
       case 'draftedit': { const d = CH.drafts[+el.dataset.n]; if (!d) return; if (isLogD(d)) return openLogForm(null, { draftId: d.id, title: d.title, date: d.date, project: d.project }); return openTaskForm(null, { draftId: d.id, title: d.title, due: d.due, time: d.time, recur: d.recur, noDue: d.noDue, priority: d.priority, role: d.role, source: d.source, project: d.project, who: d.people.filter(p => p.role !== 'related').map(p => refName(p.ref)) }); }
       case 'ansdue': { const pp = pending(); if (pp) { pp.d.due = el.dataset.v || null; pp.d.noDue = !el.dataset.v; pp.d.weekendOk = false; } return renderChat(); }
       case 'answk': { const pp = pending(); if (pp) { if (el.dataset.v === 'keep') pp.d.weekendOk = true; else pp.d.due = el.dataset.v; } return renderChat(); }
-      case 'anssrc': { const pp = pending(); if (pp) pp.d.source = el.dataset.v; return renderChat(); }
+      case 'anssrc': { const pp = pending(), v = el.dataset.v; if (el.dataset.all) CH.drafts.forEach(x => { if (!isLogD(x) && !x.source) x.source = v; }); else if (pp) pp.d.source = v; CH.lastSrc = v; return renderChat(); }
       case 'answho': { const v = el.dataset.v; if (CH.pick.has(v)) CH.pick.delete(v); else CH.pick.add(v); return renderChat(false); }
       case 'answhodone': { const pp = pending(); if (pp) CH.pick.forEach(pid => { if (!pp.d.people.some(p => p.ref.kind === 'known' && p.ref.id === pid)) pp.d.people.push({ ref: { kind: 'known', id: pid }, role: 'followup', what: '', due: null }); }); CH.pick = new Set(); return renderChat(); }
       case 'ansref': { const pp = pending(); if (pp && pp.d.people[+el.dataset.i]) { const pr = pp.d.people[+el.dataset.i]; pr.ref = el.dataset.v === 'keep' ? { kind: 'new', name: pr.ref.label, desc: '' } : { kind: 'known', id: el.dataset.v }; } return renderChat(); }
