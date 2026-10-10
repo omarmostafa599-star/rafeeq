@@ -4,6 +4,7 @@ import { reportHTML, ensureReportCSS, monthName } from './report.js';
 import { uploadFile, trashFile, renameFile, fileBlob, viewUrl, previewUrl, rootFolderUrl, kindOf, extLabel, fmtSize, MAX_BYTES } from './drive.js';
 import { parseCapture, splitTasks, isLogText, splitLogs, logDate, recurNext, cleanRecur, setWeekend, weekendDays, weekStartDay, today, addDays, diffDays, pd, ds, nextWeekday, addWorkdays, isWeekend, validDate, findPeople, nameTokens, normAr, lastOfMonth } from './parse.js';
 import { DICT } from './i18n.js';
+import { xlsxBlob } from './xlsx.js';
 
 /* ================= i18n & formatting ================= */
 const L = () => state.profile.lang === 'en' ? 'en' : 'ar';
@@ -59,6 +60,7 @@ const ic = {
   note: I('<path d="M5 4h14v16H5z"/><path d="M8 9h8M8 13h8M8 17h5"/>'),
   spark: I('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>'),
   folder: I('<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  table: I('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/>'),
   clip: I('<path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>'),
   ext: I('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
   link: I('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
@@ -307,14 +309,71 @@ function mfCard(g) {
       ${phone ? `<div class="mf-acts"><a class="btn sm" href="tel:${esc(phone.replace(/[^\d+]/g, ''))}">${sic('phone', 15)}${t('call')}</a><a class="btn sm" href="https://wa.me/${esc(waNumber(phone))}" target="_blank" rel="noopener">${sic('send', 15)}WhatsApp</a></div>` : ''}
     </section>`;
 }
-function tasksHead(full) {
+function tasksHead(mode) {
+  const full = mode === 'list', tbl = mode === 'table';
   const pc = id => live().filter(x => isOpen(x) && (x.waiting_on === id || openFus(x).some(f => f.person_id === id))).length;
   const ppl = people().filter(p => pc(p.id)).slice(0, 12);
   const openN = live().filter(isOpen).length;
-  return `<header class="hdr"><div class="grow"><h1>${t('navTasks')}</h1><div class="sub">${plural(openN, 'openTasks')}</div></div><button type="button" class="btn primary sm desk" data-act="chat">${ic.plus}${t('newTask')}</button><button type="button" class="iconbtn addman mob" data-act="chat" aria-label="${esc(t('newTask'))}">${ic.plus}</button>${meBtn()}</header>
+  return `<header class="hdr"><div class="grow"><h1>${t('navTasks')}</h1><div class="sub">${plural(openN, 'openTasks')}</div></div><button type="button" class="btn sm" data-tview="${tbl ? 'cards' : 'table'}" aria-pressed="${tbl}">${tbl ? sic('list', 16) : sic('table', 16)}<span class="lbl-sm">${t(tbl ? 'viewCards' : 'viewTable')}</span></button><button type="button" class="btn primary sm desk" data-act="chat">${ic.plus}${t('newTask')}</button><button type="button" class="iconbtn addman mob" data-act="chat" aria-label="${esc(t('newTask'))}">${ic.plus}</button>${meBtn()}</header>
       ${full ? `<label class="search">${ic.search}<input type="search" id="taskQ" value="${esc(UI.q)}" placeholder="${esc(t('searchTasks'))}" aria-label="${esc(t('searchTasks'))}" dir="auto"></label>` : ''}
       ${full && ppl.length ? `<div class="people-row">${ppl.map(p => `<button type="button" class="pchip ${UI.personF === p.id ? 'on' : ''}" data-pf="${p.id}"><span class="av">${esc(initials(p.name))}</span><span class="nm" dir="auto">${esc(p.name.replace(/^(?:م|د|أ|ا)\.\s*/, '').split(' ')[0])}</span><i class="num">${pc(p.id)}</i></button>`).join('')}</div>` : ''}
-      <div class="seg four" role="tablist">${[['active', 'segActive'], ['wait', 'segWaitShort'], ['week', 'segWeek'], ['done', 'segDone']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${UI.seg === k}" class="${UI.seg === k ? 'on' : ''}" data-seg="${k}">${t(l)}</button>`).join('')}</div>`;
+      ${tbl ? '' : `<div class="seg four" role="tablist">${[['active', 'segActive'], ['wait', 'segWaitShort'], ['week', 'segWeek'], ['done', 'segDone']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${UI.seg === k}" class="${UI.seg === k ? 'on' : ''}" data-seg="${k}">${t(l)}</button>`).join('')}</div>`}`;
+}
+/* table: every task in one sheet, filterable and sortable — for review with a manager, and as an Excel file */
+const PRIO_L = p => t(p === 'hi' ? 'tpHi' : p === 'lo' ? 'tpLo' : 'tpMid');
+const peopleOf = x => [...new Set([x.status === 'wait' ? x.waiting_on : null, ...(isOpen(x) ? openFus(x) : (x.followups || [])).map(f => f.person_id)].filter(Boolean).map(pname))];
+const lastTouch = x => { const at = (x.log || []).map(l => l.at).filter(Boolean).sort().pop() || x.client_ts || x.created_at; return at ? localDay(at) : ''; };
+const TCOLS = [
+  { k: 'title', h: 'fTitle', key: true, w: 42, get: x => x.title },
+  { k: 'due', h: 'fDue', key: true, w: 12, date: true, get: x => x.due || '' },
+  { k: 'time', h: 'fTime', w: 9, get: x => x.due_time || '' },
+  { k: 'status', h: 'fStatus', key: true, w: 14, get: x => t(stKey(x.status)) + (isLate(x) ? ` · ${t('secLate')}` : ''), sort: x => (isLate(x) ? 0 : 1) + ({ wait: 1, prog: 2, todo: 3, hold: 4, done: 5, cancelled: 6 }[x.status] || 9) / 10 },
+  { k: 'prio', h: 'fPriority', key: true, w: 11, get: x => PRIO_L(x.priority), sort: x => ({ hi: 0, mid: 1, lo: 2 }[x.priority] ?? 1) },
+  { k: 'role', h: 'fRole', w: 13, get: x => t('role_' + (x.role || 'exec')) },
+  { k: 'source', h: 'fSource', w: 16, get: x => srcLabel(x.source) },
+  { k: 'people', h: 'tcPeople', key: true, w: 22, get: x => peopleOf(x).join(L() === 'ar' ? '، ' : ', ') },
+  { k: 'project', h: 'tcProject', key: true, w: 18, get: x => x.project || '' },
+  { k: 'recur', h: 'fRecur', w: 16, get: x => recurLabel(x.recur) },
+  { k: 'updated', h: 'tcUpdated', w: 12, date: true, get: lastTouch },
+  { k: 'completed', h: 'tcCompleted', w: 12, date: true, get: x => x.completed_on || '' },
+];
+const XCOLS = [...TCOLS, { k: 'result', h: 'result', w: 30, get: x => x.result || '' }, { k: 'details', h: 'fDetails', w: 34, get: x => x.details || '' }];
+function tableRows() {
+  const f = UI.tf || {}, st = f.st || 'open';
+  let list = live().filter(x => !x.archived && !isLog(x));
+  list = list.filter(x => st === 'all' ? true : st === 'open' ? isOpen(x) : st === 'late' ? isLate(x) : st === 'wait' ? isOpen(x) && x.status === 'wait' : !isOpen(x));
+  if (f.person) list = list.filter(x => x.waiting_on === f.person || (x.followups || []).some(y => y.person_id === f.person));
+  if (f.project) list = list.filter(x => projKey(x.project) === projKey(f.project));
+  if (f.from || f.to) list = list.filter(x => { const d = !isOpen(x) ? x.completed_on : x.due; return d && (!f.from || d >= f.from) && (!f.to || d <= f.to); });
+  const col = TCOLS.find(c => c.k === (UI.tsort?.k || 'due')) || TCOLS[1], dir = UI.tsort?.d || 1;
+  const val = x => col.sort ? col.sort(x) : (col.get(x) || (col.date ? '9999' : '\uffff'));
+  return list.sort((a, b) => { const va = val(a), vb = val(b); return (va < vb ? -1 : va > vb ? 1 : 0) * dir || (a.created_at < b.created_at ? -1 : 1); });
+}
+function tableView() {
+  const f = UI.tf || {}, rows = tableRows(), all = UI.tcols === 'all';
+  const projects = [...new Set(live().map(x => (x.project || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ar'));
+  const ppl = people().filter(p => live().some(x => x.waiting_on === p.id || (x.followups || []).some(y => y.person_id === p.id)));
+  const sel = (id, cur, opts) => `<select id="${id}" class="tf">${opts.map(([v, l]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  const sortK = UI.tsort?.k || 'due', sortD = UI.tsort?.d || 1;
+  const cellOf = (c, x) => { const v = c.get(x); if (!v) return '<span class="muted">—</span>'; if (c.date) return `<span class="num">${fmtShort(v)}</span>`; if (c.k === 'time') return `<span class="num">${fmtTime(v)}</span>`; if (c.k === 'title') return `<span dir="auto">${esc(v)}</span>`; if (c.k === 'project') return `<span class="projlink" data-proj="${esc(v)}" dir="auto">${esc(v)}</span>`; return `<span dir="auto">${esc(v)}</span>`; };
+  return `<div class="tf-bar">
+      ${sel('tfSt', f.st || 'open', [['open', t('tfOpen')], ['late', t('secLate')], ['wait', t('segWaitShort')], ['done', t('segDone')], ['all', t('tfAll')]])}
+      ${sel('tfPerson', f.person || '', [['', t('tfAnyPerson')], ...ppl.map(p => [p.id, p.name])])}
+      ${sel('tfProject', f.project || '', [['', t('tfAnyProject')], ...projects.map(p => [p, p])])}
+      <span class="tf-dates"><label class="tf-date"><span>${t('tfFrom')}</span><input type="date" id="tfFrom" value="${esc(f.from || '')}" aria-label="${t('tfFrom')}"></label><label class="tf-date"><span>${t('tfTo')}</span><input type="date" id="tfTo" value="${esc(f.to || '')}" aria-label="${t('tfTo')}"></label></span>
+      ${f.person || f.project || f.from || f.to || (f.st && f.st !== 'open') ? `<button type="button" class="linkbtn" data-act="tfreset">${t('tfReset')}</button>` : ''}
+    </div>
+    <div class="tf-sum"><span>${plural(rows.length, 'tasks')}</span><span class="grow"></span><button type="button" class="btn sm mob" data-act="tcols">${t(all ? 'tcKeyCols' : 'tcAllCols')}</button><button type="button" class="btn sm primary" data-act="xlsx" ${rows.length ? '' : 'disabled'}>${sic('download', 16)}${t('exportXlsx')}</button></div>
+    ${rows.length ? `<div class="tbl-wrap ${all ? '' : 'compact'}"><table class="tbl"><thead><tr>${TCOLS.map(c => `<th class="${c.key ? '' : 'opt'} c-${c.k}"><button type="button" data-tsort="${c.k}" aria-sort="${sortK === c.k ? (sortD > 0 ? 'ascending' : 'descending') : 'none'}">${t(c.h)}${sortK === c.k ? `<i>${sortD > 0 ? '▲' : '▼'}</i>` : ''}</button></th>`).join('')}</tr></thead>
+      <tbody>${rows.map(x => `<tr data-open="${x.id}" class="${isLate(x) ? 'late' : ''} ${isOpen(x) ? '' : 'done'}" tabindex="0" role="button">${TCOLS.map(c => `<td class="${c.key ? '' : 'opt'} c-${c.k}">${cellOf(c, x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty small"><p>${t('noMatch')}</p></div>`}`;
+}
+function exportXlsx() {
+  const rows = tableRows(); if (!rows.length) return;
+  const blob = xlsxBlob({ sheet: t('xlsxSheet'), rtl: L() === 'ar', columns: XCOLS.map(c => ({ title: t(c.h), width: c.w, type: c.date ? 'date' : 'text' })), rows: rows.map(x => XCOLS.map(c => c.k === 'time' ? (x.due_time ? fmtTime(x.due_time) : '') : c.get(x))) });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `rafeeq-tasks-${T()}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(t('xlsxDone', { n: plural(rows.length, 'tasks') }));
 }
 /* weekly agenda: workdays only, items ordered by time — what the week looks like at a glance */
 function weekHTML() {
@@ -572,7 +631,8 @@ const VIEWS = {
     return h;
   },
   tasks() {
-    if (UI.seg === 'week') return tasksHead(false) + weekHTML();
+    if (UI.tview === 'table') return tasksHead('table') + tableView();
+    if (UI.seg === 'week') return tasksHead('week') + weekHTML();
     let list = live();
     if (UI.seg === 'active') list = list.filter(x => isOpen(x) && x.status !== 'wait' && !x.archived);
     if (UI.seg === 'wait') list = list.filter(x => isOpen(x) && !x.archived && x.status === 'wait');
@@ -584,7 +644,7 @@ const VIEWS = {
     const shown = list.slice(0, UI.listMax || 80);
     const listHTML = `${shown.length ? shown.map(x => taskCard(x, { status: UI.seg !== 'active' })).join('') : `<div class="empty small"><p>${UI.q.trim() || UI.personF ? t('noMatch') : t('noTasksHere')}</p></div>`}${list.length > shown.length ? `<button type="button" class="linkbtn center" data-act="morelist">${t('showMore', { n: list.length - shown.length })}</button>` : ''}`;
     if (UI.listOnly) return listHTML;
-    return tasksHead(true) + `
+    return tasksHead('list') + `
       ${UI.personF ? `<div class="chips filter"><button type="button" class="chip on" data-pf="${UI.personF}" dir="auto">${esc(pname(UI.personF))} ${sic('x', 14)}</button></div>` : ''}
       <div class="stack" id="taskList">${listHTML}</div>
       ${UI.seg === 'done' || UI.seg === 'archived' ? `<button type="button" class="linkbtn center" data-seg="${UI.seg === 'archived' ? 'done' : 'archived'}">${UI.seg === 'archived' ? t('backToDone') : t('showArchived')}</button>` : ''}`;
@@ -1064,7 +1124,9 @@ async function chatSend(text, label) {
       CH.drafts.push(...lg.map(a => fromLog(a.title, a.date, text, a.project)), ...tk.map((a, i) => fromAI(a, tl.length === tk.length ? tl[i] : { source: tl.length === 1 ? tl[0].source : null }, text)));
     }
     // 3) what to say / do
-    if (r.intent === 'save') { if (CH.drafts.length && !pending()) { CH.thinking = false; saveDrafts(); return; } botSay(CH.drafts.length ? t('stillMissing') : (r.reply || t('nothingToSave'))); }
+    const fresh = tk.length || lg.length; // items created by this very message have not been reviewed yet
+    if (r.intent === 'save' && n0 && !fresh) { if (!pending()) { CH.thinking = false; saveDrafts(); return; } botSay(t('stillMissing')); }
+    else if (r.intent === 'save') botSay(fresh ? t('reviewFirst') : (r.reply || t('nothingToSave')));
     else if (r.intent === 'cancel') { CH.drafts = []; botSay(r.reply || t('draftsDiscarded')); }
     else if (r.intent === 'query' && r.query) { if (r.reply) botSay(r.reply); CH.msgs.push({ who: 'bot', html: queryHTML(normQuery(r.query)) }); }
     else if (r.reply) botSay(r.reply);
@@ -1888,6 +1950,8 @@ document.addEventListener('click', async e => {
   if ((el = q('[data-tab]'))) { e.preventDefault(); return go(el.dataset.tab); }
   if ((el = q('[data-jump]'))) { document.getElementById(el.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if ((el = q('[data-seg]'))) { UI.seg = el.dataset.seg; return renderMain(); }
+  if ((el = q('[data-tview]'))) { UI.tview = el.dataset.tview === 'table' ? 'table' : 'cards'; return renderMain(); }
+  if ((el = q('[data-tsort]'))) { const k = el.dataset.tsort; UI.tsort = { k, d: UI.tsort?.k === k ? -(UI.tsort.d || 1) : 1 }; UI.keepScroll = true; return renderMain(); }
   if ((el = q('[data-wk]'))) { UI.wk = +el.dataset.wk || 0; return renderMain(); }
   if ((el = q('[data-proj]'))) { e.stopPropagation(); return openProject(el.dataset.proj); }
   if ((el = q('[data-pview]'))) { UI.pview = el.dataset.pview; return renderMain(); }
@@ -1984,6 +2048,9 @@ document.addEventListener('click', async e => {
       case 'revokeshare': return confirmSheet(t('revokeQ'), t('revoke'), async () => { const { error } = await sb.from('shares').update({ revoked: true }).eq('id', el.dataset.sid); if (error) return toast(t('shareFail'), null, 'err'); const it = (UI.sharesList || []).find(x => x.id === el.dataset.sid); if (it) it.revoked = true; UI.layers.forEach(Lr => Lr.rerender()); toast(t('revokedSt')); });
       case 'asksrc': { const st = Object.assign({}, state.profile.settings); st.askSource = !askSource(); saveProfile({ settings: st }); return renderMain(); }
       case 'tour': return openTour(0);
+      case 'xlsx': return exportXlsx();
+      case 'tcols': UI.tcols = UI.tcols === 'all' ? 'key' : 'all'; UI.keepScroll = true; return renderMain();
+      case 'tfreset': UI.tf = {}; return renderMain();
       case 'tournext': return openTour(+el.dataset.v);
       case 'tourdone': { try { localStorage.setItem('rafeeq2.tour.' + (state.user?.id || 'local'), '1'); } catch { } closeSheet(true); if (!(state.profile.settings || {}).tourDone) { const st = Object.assign({}, state.profile.settings, { tourDone: 1 }); saveProfile({ settings: st }, { quiet: true }); } if (el.dataset.chat) openChat(); return; }
       case 'aitoggle': { const st = Object.assign({}, state.profile.settings); st.ai = st.ai === false; saveProfile({ settings: st }); if (st.ai) { UI.aiBlocked = null; scheduleAI(500); } return renderMain(); }
@@ -2036,7 +2103,7 @@ document.addEventListener('input', e => {
   if (e.target.id === 'libQ') { UI.lq = e.target.value; clearTimeout(UI.lqt); UI.lqt = setTimeout(() => renderListOnly('library', '#libList'), 120); return; }
   if (e.target.id === 'taskQ') { UI.q = e.target.value; clearTimeout(UI.qt); UI.qt = setTimeout(() => renderListOnly('tasks', '#taskList'), 120); }
 });
-document.addEventListener('change', e => { if (e.target.id === 'ansDate' && validDate(e.target.value)) { const pp = pending(); if (pp) { pp.d.due = e.target.value; pp.d.noDue = false; pp.d.weekendOk = isWeekend(e.target.value); } return renderChat(); } if (e.target.dataset?.hsel) { const ids = selOf(UI.hym); if (e.target.checked) ids.add(e.target.dataset.hsel); else ids.delete(e.target.dataset.hsel); return; } if (e.target.id === 'libMonth') { UI.lmonth = e.target.value; return renderMain(); } if (e.target.id === 'importFile' && e.target.files[0]) { importBackup(e.target.files[0]); e.target.value = ''; } });
+document.addEventListener('change', e => { if (/^tf(St|Person|Project|From|To)$/.test(e.target.id || '')) { const k = { tfSt: 'st', tfPerson: 'person', tfProject: 'project', tfFrom: 'from', tfTo: 'to' }[e.target.id]; UI.tf = Object.assign({}, UI.tf, { [k]: e.target.type === 'date' ? (validDate(e.target.value) || '') : e.target.value }); UI.keepScroll = true; return renderMain(); } if (e.target.id === 'ansDate' && validDate(e.target.value)) { const pp = pending(); if (pp) { pp.d.due = e.target.value; pp.d.noDue = false; pp.d.weekendOk = isWeekend(e.target.value); } return renderChat(); } if (e.target.dataset?.hsel) { const ids = selOf(UI.hym); if (e.target.checked) ids.add(e.target.dataset.hsel); else ids.delete(e.target.dataset.hsel); return; } if (e.target.id === 'libMonth') { UI.lmonth = e.target.value; return renderMain(); } if (e.target.id === 'importFile' && e.target.files[0]) { importBackup(e.target.files[0]); e.target.value = ''; } });
 document.addEventListener('keydown', e => {
   const tgt = e.target;
   if ((e.key === 'Enter' || e.key === ' ') && tgt.matches?.('[role="button"][data-open]')) { e.preventDefault(); openTask(tgt.dataset.open); return; }

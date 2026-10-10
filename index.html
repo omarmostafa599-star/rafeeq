@@ -434,6 +434,30 @@ body.presenting{overflow:hidden}
   body.printing,body.printing.presenting{overflow:visible!important;height:auto!important}
 }
 
+/* tasks table */
+.tf-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 8px}
+.tf-bar select,.tf-bar input{border:1px solid var(--line-2);background:var(--card);color:var(--ink);border-radius:10px;min-height:38px;padding:0 10px;font-size:16px;max-width:100%}
+.tf-date{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-3)}
+.tf-date input{max-width:150px}
+.tf-dates{display:inline-flex;gap:8px;flex-wrap:nowrap}
+@media (max-width:760px){.tf-bar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.tf-bar select{width:100%;padding:0 6px}.tf-dates{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:6px}.tf-date{min-width:0}.tf-date input{max-width:none;width:100%;min-width:0;padding:0 6px}.tf-bar .linkbtn{grid-column:1/-1;justify-self:start}}
+.tf-sum{display:flex;align-items:center;gap:8px;margin:4px 0 10px;font-size:13.5px;color:var(--ink-2)}
+.tf-sum .grow{flex:1}
+.tbl-wrap{overflow:auto;max-height:calc(100dvh - 260px);border:1px solid var(--line);border-radius:var(--r);background:var(--card);-webkit-overflow-scrolling:touch}
+.tbl{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:13.5px}
+.tbl th,.tbl td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:start;vertical-align:top;white-space:nowrap}
+.tbl th{position:sticky;top:0;z-index:2;background:var(--paper);font-weight:700;font-size:12.5px;color:var(--ink-2)}
+.tbl th button{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+.tbl th i{font-style:normal;font-size:9px;color:var(--accent)}
+.tbl .c-title{position:sticky;inset-inline-start:0;z-index:1;background:var(--card);white-space:normal;min-width:180px;max-width:300px;font-weight:600;box-shadow:inset -1px 0 0 var(--line)}
+.tbl th.c-title{z-index:3;background:var(--paper)}
+.tbl .c-people,.tbl .c-project,.tbl .c-source,.tbl .c-recur{white-space:normal;min-width:110px;max-width:200px}
+.tbl tbody tr{cursor:pointer}
+.tbl tbody tr:hover td{background:var(--paper)}
+.tbl tr.late .c-due,.tbl tr.late .c-status{color:var(--late);font-weight:600}
+.tbl tr.done .c-title{color:var(--ink-3);text-decoration:line-through}
+@media (max-width:760px){.tbl-wrap.compact .opt{display:none}.lbl-sm{display:none}}
+
 /* weekly agenda & project */
 .seg.four{grid-template-columns:repeat(4,1fr)}
 .wk-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px}
