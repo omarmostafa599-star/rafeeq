@@ -2,7 +2,7 @@
 import { state, onChange, boot, enterLocal, signInGoogle, signOut, cloudReady, putTask, putPerson, putFile, newTask, newPerson, newFile, saveProfile, syncNow, uuid, nowISO, bulkReplace, localLeftovers, adoptLocalLeftovers, authError, connectDrive, unlinkDrive, refreshDriveStatus, invokeRefine, invokeAssist, sb, pushSupported, pushCurrent, pushEnable, pushDisable, pushTest } from './data.js';
 import { reportHTML, ensureReportCSS, monthName } from './report.js';
 import { uploadFile, trashFile, renameFile, fileBlob, viewUrl, previewUrl, rootFolderUrl, kindOf, extLabel, fmtSize, MAX_BYTES } from './drive.js';
-import { parseCapture, splitTasks, isLogText, splitLogs, logDate, recurNext, cleanRecur, setWeekend, weekendDays, weekStartDay, today, addDays, diffDays, pd, ds, nextWeekday, addWorkdays, isWeekend, validDate, findPeople, nameTokens, normAr, lastOfMonth } from './parse.js';
+import { parseCapture, timeFrom, splitTasks, isLogText, splitLogs, logDate, recurNext, cleanRecur, setWeekend, weekendDays, weekStartDay, today, addDays, diffDays, pd, ds, nextWeekday, addWorkdays, isWeekend, validDate, findPeople, nameTokens, normAr, lastOfMonth } from './parse.js';
 import { DICT } from './i18n.js';
 import { xlsxBlob } from './xlsx.js';
 
@@ -856,7 +856,7 @@ function confirmSheet(msg, okLabel, onOk, danger = true) {
 /* ================= assistant chat: capture (one or many tasks) + questions ================= */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 const SELF = '@self';
-const askSource = () => (state.profile.settings || {}).askSource === true; // off by default: a task with no stated assigner is the user's own
+const askSource = () => (state.profile.settings || {}).askSource !== false; // on by default (2.7.2): the chat asks «who assigned this?» unless the user turned it off
 const srcLabel = s => !s ? '' : s === SELF ? t('srcSelf') : s;
 const aiOn = () => state.mode === 'cloud' && (state.profile.settings || {}).ai !== false;
 function deviceId() { try { let d = localStorage.getItem('rafeeq2.dev'); if (!d) { d = uuid(); localStorage.setItem('rafeeq2.dev', d); } return d; } catch { return 'x'; } }
@@ -925,7 +925,7 @@ function fromAI(a, local, raw = '') {
   const d = { id: uuid(), raw: local?.raw || '', title: String(a.title || local?.title || '').replace(/\s+/g, ' ').trim().slice(0, 300), due: validDate(a.due) || local?.due || null, weekendOk: false,
     priority: ['hi', 'mid', 'lo'].includes(a.priority) ? a.priority : local?.priority || 'mid', role: ['exec', 'follow', 'both'].includes(a.role) ? a.role : 'exec',
     noDue: !!a.no_due && /(بدون|من غير|دون|مفيش|ملوش|مالوش|no deadline|no due|whenever)/.test(normAr(raw || local?.raw || '')),
-    source: a.source_self && SELF_RE.test(normAr(raw || local?.raw || '')) ? SELF : a.source ? (personById(matchPerson(a.source))?.name || String(a.source).slice(0, 80)) : local?.source || null,
+    source: (() => { const me = a.source && /^(انا|نفسي|me|myself|self)$/.test(normAr(a.source).trim()); if (a.source && !me) return personById(matchPerson(a.source))?.name || String(a.source).slice(0, 80); return me || (a.source_self && SELF_RE.test(normAr(raw || local?.raw || ''))) ? SELF : local?.source || null; })(), // a named assigner wins; «أنا» = self
     project: String(a.project || '').slice(0, 80), waitWhat: a.waiting_what || null, people: [],
     time: /^\d{2}:\d{2}$/.test(a.due_time || '') ? a.due_time : local?.time || null, recur: cleanRecur(a.recur) || local?.recur || null };
   if (d.recur && !d.due) d.due = recurNext(d.recur, addDays(T(), -1));
@@ -971,6 +971,10 @@ function missingOf(d) {
   if ((d.role === 'follow' || d.role === 'both') && !d.people.some(p => p.role !== 'related')) return { k: 'who' };
   return null;
 }
+/** Optional fields still empty on a complete task draft — offered with «+» chips, never required. */
+const optMissing = d => isLogD(d) || missingOf(d) ? [] : [d.due && !d.time ? 'time' : '', !d.project ? 'project' : ''].filter(Boolean);
+const OPT_LBL = { time: 'fTime', project: 'tcProject' };
+const extraOn = () => { const e = CH.extra, n = e ? CH.drafts.findIndex(d => d.id === e.id) : -1; if (n < 0 || isLogD(CH.drafts[n]) || pending()) return (CH.extra = null); return { n, k: e.k }; };
 const pending = () => { for (let n = 0; n < CH.drafts.length; n++) { const m = missingOf(CH.drafts[n]); if (m) return { n, d: CH.drafts[n], m }; } return null; };
 
 /* ---------- open / render ---------- */
@@ -990,7 +994,7 @@ function renderChat(scroll = true) {
   const log = $('#chatLog'); if (!log) return;
   const pend = pending();
   const drafts = CH.drafts.length || CH.thinking ? `<div class="bubble bot drafts">${CH.drafts.length > 1 ? `<div class="dh">${CH.drafts.every(isLogD) ? t('nLogsFound', { n: plural(CH.drafts.length, 'logs') }) : CH.drafts.some(isLogD) ? t('nItemsFound', { n: plural(CH.drafts.length, 'items') }) : t('nTasksFound', { n: plural(CH.drafts.length, 'tasks') })}</div>` : ''}${CH.drafts.map((d, n) => draftCard(d, n, pend && pend.n === n)).join('')}
-      ${CH.thinking ? `<div class="thinking"><span class="dots"><i></i><i></i><i></i></span>${t(CH.drafts.length ? 'improving' : 'understanding')}</div>` : pend ? questionHTML(pend) : `<div class="ready">${sic('check', 16)} ${CH.drafts.some(isLogD) ? t(CH.drafts.length > 1 ? 'readyItems' : 'readyLog') : CH.drafts.length > 1 ? t('readyAll', { n: plural(CH.drafts.length, 'tasks') }) : t('readyOne')}</div>`}
+      ${CH.thinking ? `<div class="thinking"><span class="dots"><i></i><i></i><i></i></span>${t(CH.drafts.length ? 'improving' : 'understanding')}</div>` : pend ? questionHTML(pend) : extraOn() ? extraHTML(extraOn()) : `${optLine()}<div class="ready">${sic('check', 16)} ${CH.drafts.some(isLogD) ? t(CH.drafts.length > 1 ? 'readyItems' : 'readyLog') : CH.drafts.length > 1 ? t('readyAll', { n: plural(CH.drafts.length, 'tasks') }) : t('readyOne')}</div>`}
       ${CH.drafts.length ? `<div class="save-row"><button type="button" class="btn primary block" data-act="chatsave" ${pend || CH.thinking ? 'disabled' : ''}>${ic.check}${CH.drafts.length > 1 ? t('saveAll', { n: CH.drafts.length }) : t('save')}</button><button type="button" class="btn" data-act="chatdiscard">${t('discardDrafts')}</button></div>` : ''}</div>` : '';
   log.innerHTML = CH.msgs.map(m => `<div class="bubble ${m.who}">${m.html}</div>`).join('') + drafts;
   const sb2 = $('#chatSendBtn'); if (sb2) sb2.disabled = !!CH.thinking;
@@ -1021,6 +1025,7 @@ function draftCard(d, n, active) {
     d.source === SELF && !askSource() ? '' : d.source ? `<span class="chip sm">${t('srcShort')}: ${esc(srcLabel(d.source))}</span>` : `<span class="chip sm missing">${t('srcShort')}: ${L() === 'ar' ? '؟' : '?'}</span>`,
     ...ppl.map(p => `<span class="chip sm ${p.ref.kind === 'generic' || p.ref.kind === 'amb' ? 'missing' : ''}">${sic(p.role === 'waiting' ? 'clock' : 'users', 13)}<span dir="auto">${esc(refName(p.ref))}</span>${p.ref.kind === 'new' && p.ref.desc ? `<small dir="auto">· ${esc(p.ref.desc)}</small>` : ''}${p.ref.kind === 'new' ? ` <em>${t('newBadge')}</em>` : ''}</span>`),
     d.project ? `<span class="chip sm" dir="auto">${esc(d.project)}</span>` : '',
+    ...(CH.thinking ? [] : optMissing(d).map(k => `<button type="button" class="chip sm plus ${CH.extra && CH.extra.id === d.id && CH.extra.k === k ? 'on' : ''}" data-act="draftadd" data-n="${n}" data-k="${k}" aria-label="${esc(t('addField', { f: t(OPT_LBL[k]) }))}"><b aria-hidden="true">+</b>${t(OPT_LBL[k])}</button>`)),
   ].filter(Boolean).join('');
   return `<div class="dcard ${active ? 'active' : ''} ${missingOf(d) ? '' : 'ok'}">
     <div class="dtop">${CH.drafts.length > 1 ? `<span class="dn num">${n + 1}</span>` : ''}<div class="dt" dir="auto">${esc(d.title)}</div>
@@ -1040,6 +1045,31 @@ function questionHTML({ n, d, m }) {
   else if (m.k === 'who') { q = t('askWho', { t: ttl }); opts = topPeople(8).map(p => `<button type="button" class="chip ${CH.pick.has(p.id) ? 'on' : ''}" data-act="answho" data-v="${p.id}" dir="auto">${esc(p.name)}</button>`).join('') + `<button type="button" class="chip primary-chip" data-act="answhodone" ${CH.pick.size ? '' : 'disabled'}>${sic('check', 14)}${t('done')}</button>`; }
   else if (m.k === 'generic' || m.k === 'amb') { const p = d.people[m.i]; q = m.k === 'generic' ? t('askGeneric', { r: esc(p.ref.label) }) : t('whoExactly', { n: esc(p.ref.label) }); const ids = m.k === 'amb' ? p.ref.ids : topPeople(8).map(x => x.id); opts = ids.map(id => `<button type="button" class="chip" data-act="ansref" data-i="${m.i}" data-v="${id}" dir="auto">${esc(pname(id))}</button>`).join('') + (m.k === 'generic' ? `<button type="button" class="chip" data-act="ansref" data-i="${m.i}" data-v="keep">${t('keepAs', { r: esc(p.ref.label) })}</button>` : ''); }
   return `<div class="ask q"><p>${lead}${q}</p><div class="opts">${opts}</div>${m.k === 'match' ? '' : `<small class="note">${t(m.k === 'who' ? 'orTypeNames' : m.k === 'source' ? 'orTypeName' : m.k === 'due' ? 'orTypeDate' : 'orType')}</small>`}</div>`;
+}
+/** One line naming the optional fields still empty («ناقص كمان الوقت والمشروع، تحب تضيفهم؟»). */
+function optLine() {
+  const ks = [...new Set(CH.drafts.flatMap(optMissing))]; if (!ks.length) return '';
+  const f = ks.map(k => t(OPT_LBL[k])).join(L() === 'ar' ? ' و' : ' and ');
+  return `<p class="optline">${t(ks.length > 1 ? 'optMissingN' : 'optMissing1', { f })} <small>${t('optHint')}</small></p>`;
+}
+function extraHTML({ n, k }) {
+  const d = CH.drafts[n], lead = CH.drafts.length > 1 ? `<b class="qn">${t('taskN', { n: n + 1 })}</b> ` : '';
+  const ttl = `«${esc(d.title.length > 60 ? d.title.slice(0, 60) + '…' : d.title)}»`;
+  const opts = k === 'time'
+    ? ['09:00', '10:00', '12:00', '14:00'].map(v => `<button type="button" class="chip" data-act="ansextra" data-v="${v}"><span class="num">${fmtTime(v)}</span></button>`).join('') + `<label class="chip datein">${sic('clock', 15)}<input type="time" id="ansTime" aria-label="${esc(t('fTime'))}"></label>`
+    : [...new Set(live().map(x => (x.project || '').trim()).filter(Boolean))].slice(0, 6).map(v => `<button type="button" class="chip" data-act="ansextra" data-v="${esc(v)}" dir="auto">${esc(v)}</button>`).join('');
+  return `<div class="ask q"><p>${lead}${t(k === 'time' ? 'askTimeQ' : 'askProjectQ', { t: ttl })}</p><div class="opts">${opts}<button type="button" class="chip" data-act="ansextra" data-v="" data-skip="1">${t('cancel')}</button></div><small class="note">${t(k === 'time' ? 'orTypeTime' : 'orTypeProject')}</small></div>`;
+}
+/** Typed answer to a «+» question. Returns false when the text is not an answer. */
+function answerExtra({ n, k }, text) {
+  const d = CH.drafts[n]; if (!d) return false;
+  if (k === 'time') {
+    const tm = timeFrom(text) || (text.trim().split(/\s+/).length <= 3 ? timeFrom('الساعة ' + text) : null);
+    if (tm) { d.time = tm.time; CH.extra = null; return true; }
+    return text.split(/\s+/).length <= 3 ? (CH.msgs.push({ who: 'bot', html: t('timeNotUnderstood') }), true) : false;
+  }
+  if (text.split(/\s+/).length > 6) return false;
+  d.project = text.replace(/\s+/g, ' ').trim().slice(0, 80); CH.extra = null; return true;
 }
 
 /* ---------- sending ---------- */
@@ -1095,6 +1125,8 @@ async function chatSend(text, label) {
   if (CH.drafts.length && isCancel(text)) { CH.drafts = []; CH.pick = new Set(); botSay(t('draftsDiscarded')); renderChat(); return; }
   if (pend && pend.m.k !== 'match' && isConfirm(text)) { botSay(t('stillMissing')); renderChat(); return; }
   if (pend && !QUERY_RE.test(' ' + normAr(text) + ' ') && answerText(pend, text)) { renderChat(); return; }
+  const ex = !pend && extraOn();
+  if (ex && !isConfirm(text) && !QUERY_RE.test(' ' + normAr(text) + ' ') && answerExtra(ex, text)) { renderChat(); return; }
   const looksQuery = /[?؟]\s*$/.test(text) || /^(هات|اعرض|وريني|ورّيني|ايه|إيه|ما هي|ماهي|مين|من عنده|كام|عندي ايه|عندي إيه|ملخص|show|list|what|who|which|summary)(\s|$)/.test(shortN(text)) || shortN(text).split(' ').length <= 5;
   const lq = (looksQuery || !(aiOn() && navigator.onLine)) ? localQuery(text) : null; // «اعرض التقرير على المدير بكرة» is a task, not a question
   if (lq) { CH.msgs.push({ who: 'bot', html: queryHTML(lq) }); hist('model', t('answeredQuery')); renderChat(); return; }
@@ -1974,6 +2006,8 @@ document.addEventListener('click', async e => {
       case 'chatsend': return chatSend($('#chatIn')?.value);
       case 'chatq': return chatSend(el.dataset.q, el.dataset.l);
       case 'chatsave': return saveDrafts();
+      case 'draftadd': { const d = CH.drafts[+el.dataset.n], k = el.dataset.k; if (!d) return; CH.extra = CH.extra && CH.extra.id === d.id && CH.extra.k === k ? null : { id: d.id, k }; renderChat(); if (CH.extra) setTimeout(() => $('#chatIn')?.focus(), 50); return; }
+      case 'ansextra': { const e = extraOn(); if (e && !el.dataset.skip) { const d = CH.drafts[e.n]; if (e.k === 'time') d.time = el.dataset.v; else d.project = el.dataset.v; } CH.extra = null; return renderChat(); }
       case 'chatdiscard': CH.drafts = []; CH.pick = new Set(); return renderChat();
       case 'draftdrop': CH.drafts.splice(+el.dataset.n, 1); return renderChat();
       case 'draftmerge': { const n = +el.dataset.n; const a = CH.drafts[n - 1], b = CH.drafts[n]; if (!a || !b) return; if (isLogD(a) || isLogD(b)) { if (!isLogD(a) || !isLogD(b)) return; a.title = `${a.title} ${t('andJoin2')} ${b.title}`.slice(0, 300); a.project = a.project || b.project; a.match = matchOpenTask(a.title); a.closeTask = undefined; CH.drafts.splice(n, 1); return renderChat(); } a.title = `${a.title} ${t('andJoin')} ${b.title}`.slice(0, 300); b.people.forEach(p => { if (!a.people.some(q => refName(q.ref) === refName(p.ref))) a.people.push(p); }); if (b.due && (!a.due || b.due < a.due)) a.due = b.due; if (b.priority === 'hi') a.priority = 'hi'; a.source = a.source || b.source; a.time = a.time || b.time; a.recur = a.recur || b.recur; if (a.role !== b.role) a.role = 'both'; CH.drafts.splice(n, 1); return renderChat(); }
@@ -2103,7 +2137,7 @@ document.addEventListener('input', e => {
   if (e.target.id === 'libQ') { UI.lq = e.target.value; clearTimeout(UI.lqt); UI.lqt = setTimeout(() => renderListOnly('library', '#libList'), 120); return; }
   if (e.target.id === 'taskQ') { UI.q = e.target.value; clearTimeout(UI.qt); UI.qt = setTimeout(() => renderListOnly('tasks', '#taskList'), 120); }
 });
-document.addEventListener('change', e => { if (/^tf(St|Person|Project|From|To)$/.test(e.target.id || '')) { const k = { tfSt: 'st', tfPerson: 'person', tfProject: 'project', tfFrom: 'from', tfTo: 'to' }[e.target.id]; UI.tf = Object.assign({}, UI.tf, { [k]: e.target.type === 'date' ? (validDate(e.target.value) || '') : e.target.value }); UI.keepScroll = true; return renderMain(); } if (e.target.id === 'ansDate' && validDate(e.target.value)) { const pp = pending(); if (pp) { pp.d.due = e.target.value; pp.d.noDue = false; pp.d.weekendOk = isWeekend(e.target.value); } return renderChat(); } if (e.target.dataset?.hsel) { const ids = selOf(UI.hym); if (e.target.checked) ids.add(e.target.dataset.hsel); else ids.delete(e.target.dataset.hsel); return; } if (e.target.id === 'libMonth') { UI.lmonth = e.target.value; return renderMain(); } if (e.target.id === 'importFile' && e.target.files[0]) { importBackup(e.target.files[0]); e.target.value = ''; } });
+document.addEventListener('change', e => { if (/^tf(St|Person|Project|From|To)$/.test(e.target.id || '')) { const k = { tfSt: 'st', tfPerson: 'person', tfProject: 'project', tfFrom: 'from', tfTo: 'to' }[e.target.id]; UI.tf = Object.assign({}, UI.tf, { [k]: e.target.type === 'date' ? (validDate(e.target.value) || '') : e.target.value }); UI.keepScroll = true; return renderMain(); } if (e.target.id === 'ansTime' && /^\d{2}:\d{2}$/.test(e.target.value)) { const ex = extraOn(); if (ex) { CH.drafts[ex.n].time = e.target.value; CH.extra = null; } return renderChat(); } if (e.target.id === 'ansDate' && validDate(e.target.value)) { const pp = pending(); if (pp) { pp.d.due = e.target.value; pp.d.noDue = false; pp.d.weekendOk = isWeekend(e.target.value); } return renderChat(); } if (e.target.dataset?.hsel) { const ids = selOf(UI.hym); if (e.target.checked) ids.add(e.target.dataset.hsel); else ids.delete(e.target.dataset.hsel); return; } if (e.target.id === 'libMonth') { UI.lmonth = e.target.value; return renderMain(); } if (e.target.id === 'importFile' && e.target.files[0]) { importBackup(e.target.files[0]); e.target.value = ''; } });
 document.addEventListener('keydown', e => {
   const tgt = e.target;
   if ((e.key === 'Enter' || e.key === ' ') && tgt.matches?.('[role="button"][data-open]')) { e.preventDefault(); openTask(tgt.dataset.open); return; }
